@@ -20,7 +20,7 @@ if(USE_CONDA)
 message(STATUS "using conda environment $ENV{CONDA_PREFIX}")
 set(PACKAGE_PREFIX $ENV{CONDA_PREFIX})
 else()
-set(PACKAGE_PREFIX "/home/zhd9702/miniconda3/envs/robtop")
+# set(PACKAGE_PREFIX "/home/zhd9702/miniconda3/envs/robtop")
 endif()
 set(TBB_ROOT ${PACKAGE_PREFIX})
 set(CMAKE_MODULE_PATH ${PACKAGE_PREFIX})
@@ -42,7 +42,7 @@ include(ExternalProject)
 # Fetch OpenVDB 8.2
 FetchContent_Declare(
   openvdb
-  URL https://github.com/AcademySoftwareFoundation/openvdb/archive/refs/tags/v8.2.0.tar.gz
+  URL /home/xyz/ThirdParty/openvdb-8.2.0.tar.gz
   URL_HASH MD5=2852fe7176071eaa18ab9ccfad5ec403
 )
 FetchContent_MakeAvailable(openvdb)
@@ -52,7 +52,7 @@ message(STATUS "openvdb_BINARY_DIR = ${openvdb_BINARY_DIR} ")
 # Fetch trimesh2
 FetchContent_Declare(
   trimesh2
-  GIT_REPOSITORY https://github.com/jrock08/Trimesh2.git
+  GIT_REPOSITORY /home/xyz/ThirdParty/Trimesh2
   GIT_TAG 121d33992f83aeb9ec823936b5136f8bf854d6f0
 )
 FetchContent_MakeAvailable(trimesh2)
@@ -74,14 +74,14 @@ FetchContent_MakeAvailable(trimesh2)
 
 FetchContent_Declare(
   spectra
-  GIT_REPOSITORY https://github.com/yixuan/spectra.git
+  GIT_REPOSITORY /home/xyz/ThirdParty/spectra
   GIT_TAG 8c7242e08f0fb7f6a0022cfe232e3dc5b5bd4eb4
 )
 FetchContent_MakeAvailable(spectra)
 
 FetchContent_Declare(
   OpenMesh
-  GIT_REPOSITORY https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh.git
+  GIT_REPOSITORY /home/xyz/ThirdParty/OpenMesh
   GIT_TAG        OpenMesh-8.1
 )
 FetchContent_MakeAvailable(OpenMesh)
