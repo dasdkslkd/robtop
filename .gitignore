@@ -2,3 +2,5 @@ build/*
 bench/result/*
 .vscode/*
 bench/robtop
+bench/robtop-dbg
+__pycache__/
