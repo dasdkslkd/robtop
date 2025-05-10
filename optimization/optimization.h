@@ -19,6 +19,8 @@ struct Parameter {
 	int gridreso;
 	float youngs_modulu;
 	float poisson_ratio;
+	bool use_spinodal;
+	float target_compliance;
 };
 
 extern Parameter params;
@@ -32,7 +34,7 @@ void logParams(std::string file, std::string version_str, int argc, char** argv)
 void setParameters(
 	float volRatio, float volDecrease, float designStep, float filterRadi, float dampRatio, float powerPenal,
 	float min_density, int gridreso, float youngs_modulu, float poisson_ratio, float shell_width,
-	bool logdensity, bool logcompliance);
+	bool logdensity, bool logcompliance, bool usespinodal, float target_compliance);
 
 void setOutpurDir(const std::string& dirname);
 
@@ -64,9 +66,13 @@ double MGPSOR(void);
 
 void computeSensitivity(void);
 
+void targetComplianceSens(double c, double c0);
+
 bool checkAdjointVariable(void);
 
 float updateDensities(float Vgoal);
+
+void updateDensitySpinodal(float* xvar, int itn, float Vgoal);
 
 void optimization(void);
 
@@ -78,6 +84,8 @@ void setBoundaryCondition(std::function<bool(double[3])> fixarea, std::function<
 void uploadTemplateMatrix(void);
 
 void initDensities(double rho);
+
+void initDesignVariables(double rho,double t1,double t2,double t3);
 
 void update_stencil(void);
 

@@ -763,6 +763,61 @@ void HierarchyGrid::writeDensity(const std::string& filename)
 	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue);
 }
 
+void HierarchyGrid::writeDensitySpinodal()
+{
+	std::string frho(getPath("rho.vdb")), ft1(getPath("t1.vdb")), ft2(getPath("t2.vdb")), ft3(getPath("t3.vdb"));
+	printf("-- writing vdb to %s\n", frho.c_str());
+
+	std::vector<int> eidmaphost(_gridlayer[0]->n_elements);
+	gpu_manager_t::download_buf(eidmaphost.data(), _gridlayer[0]->_gbuf.eidmap, sizeof(int) * _gridlayer[0]->n_elements);
+	std::vector<float> rhohost(_gridlayer[0]->n_gselements);
+	gpu_manager_t::download_buf(rhohost.data(), _gridlayer[0]->_gbuf.rho_e, sizeof(float) * _gridlayer[0]->n_gselements);
+	std::vector<float> t1host(_gridlayer[0]->n_gselements);
+	std::vector<float> t2host(_gridlayer[0]->n_gselements);
+	std::vector<float> t3host(_gridlayer[0]->n_gselements);
+	gpu_manager_t::download_buf(t1host.data(), _gridlayer[0]->_gbuf.t1_e, sizeof(float) * _gridlayer[0]->n_gselements);
+	gpu_manager_t::download_buf(t2host.data(), _gridlayer[0]->_gbuf.t2_e, sizeof(float) * _gridlayer[0]->n_gselements);
+	gpu_manager_t::download_buf(t3host.data(), _gridlayer[0]->_gbuf.t3_e, sizeof(float) * _gridlayer[0]->n_gselements);
+	
+	std::vector<int> epos[3];
+	for (int i = 0; i < 3; i++) epos[i].resize(_gridlayer[0]->n_elements);
+
+	std::vector<float> evalue,evalt1,evalt2,evalt3;
+	evalue.resize(_gridlayer[0]->n_elements);
+	evalt1.resize(_gridlayer[0]->n_elements);
+	evalt2.resize(_gridlayer[0]->n_elements);
+	evalt3.resize(_gridlayer[0]->n_elements);
+
+	int reso = _gridlayer[0]->_ereso;
+
+	auto& esat = elesatlist[0];
+
+	for (int i = 0; i < esat._bitArray.size(); i++) {
+		int eword = esat._bitArray[i];
+		int eidbase = esat._chunkSat[i];
+
+		int eidoffset = 0;
+		for (int ji = 0; ji < BitCount<unsigned int>::value; ji++) {
+			if (!read_bit(eword, ji)) continue;
+			int bitid = i * BitCount<unsigned int>::value + ji;
+			int bitpos[3] = { bitid % reso, bitid / reso % reso, bitid / reso / reso };
+			int eid = eidoffset + eidbase;
+			int rhoid = eidmaphost[eid];
+			for (int k = 0; k < 3; k++) epos[k][eid] = bitpos[k];
+			evalue[eid] = rhohost[rhoid];
+			evalt1[eid] = t1host[rhoid];
+			evalt2[eid] = t2host[rhoid];
+			evalt3[eid] = t3host[rhoid];
+			eidoffset++;
+		}
+	}
+	
+	openvdb_wrapper_t<float>::grid2openVDBfile(frho, epos, evalue);
+	openvdb_wrapper_t<float>::grid2openVDBfile(ft1, epos, evalt1);
+	openvdb_wrapper_t<float>::grid2openVDBfile(ft2, epos, evalt2);
+	openvdb_wrapper_t<float>::grid2openVDBfile(ft3, epos, evalt3);
+}
+
 void grid::HierarchyGrid::writeSurfaceElement(const std::string& filename)
 {
 	_gridlayer[0]->mark_surface_elements_g(
@@ -1073,14 +1128,14 @@ double HierarchyGrid::v_cycle(int pre_relax, int post_relax)
 		if (_gridlayer[i]->is_dummy()) { continue; }
 		if (i > 0) {
 			//_gridlayer[i]->stencil2matlab("rxcoarse");
-			_gridlayer[i]->fineGrid->update_residual();
+			_gridlayer[i]->fineGrid->update_residual(_useSpinodal);
 			//_gridlayer[i]->fineGrid->residual2matlab("rfine");
 			_gridlayer[i]->restrict_residual(); 
 			//_gridlayer[i]->force2matlab("fcoarse");
 			_gridlayer[i]->reset_displacement();
 		}
 		if (i < n_grid() - 1) {
-			_gridlayer[i]->gs_relax(pre_relax);
+			_gridlayer[i]->gs_relax(pre_relax, _useSpinodal);
 			//_gridlayer[i]->displacement2matlab("u");
 		}
 		else {
@@ -1102,13 +1157,13 @@ double HierarchyGrid::v_cycle(int pre_relax, int post_relax)
 		//printf("-- [%d] rc=  %lf%%\n", i, _gridlayer[i]->relative_residual() * 100);
 		//_gridlayer[i]->displacement2matlab("uc");
 		//_gridlayer[i]->force2matlab("fc");
-		_gridlayer[i]->gs_relax(post_relax);
+		_gridlayer[i]->gs_relax(post_relax, _useSpinodal);
 		//_gridlayer[i]->update_residual();
 		//printf("-- [%d] rr=  %lf%%\n", i, _gridlayer[i]->relative_residual() * 100);
 		//_gridlayer[i]->displacement2matlab("ur");
 	}
 
-	_gridlayer[0]->update_residual();
+	_gridlayer[0]->update_residual(_useSpinodal);
 	return _gridlayer[0]->relative_residual();
 }
 
@@ -1118,12 +1173,12 @@ double grid::HierarchyGrid::v_halfcycle(int depth, int pre_relax /*= 1*/, int po
 	for (int i = 0; i < depth + 1; i++) {
 		if (_gridlayer[i]->is_dummy()) { continue; }
 		if (i > 0) {
-			_gridlayer[i]->fineGrid->update_residual();
+			_gridlayer[i]->fineGrid->update_residual(_useSpinodal);
 			_gridlayer[i]->restrict_residual(); 
 			_gridlayer[i]->reset_displacement();
 		}
 		if (i < n_grid() - 1) {
-			_gridlayer[i]->gs_relax(pre_relax);
+			_gridlayer[i]->gs_relax(pre_relax, _useSpinodal);
 		}
 		else {
 			_gridlayer[i]->solve_fem_host();
@@ -1135,10 +1190,10 @@ double grid::HierarchyGrid::v_halfcycle(int depth, int pre_relax /*= 1*/, int po
 		if (depth >= 2) {
 			_gridlayer[i]->prolongate_correction();
 		}
-		_gridlayer[i]->gs_relax(post_relax);
+		_gridlayer[i]->gs_relax(post_relax, _useSpinodal);
 	}
 
-	_gridlayer[0]->update_residual();
+	_gridlayer[0]->update_residual(_useSpinodal);
 	return _gridlayer[0]->relative_residual();
 
 }
@@ -1584,6 +1639,21 @@ size_t grid::Grid::build(
 	// finest layer
 	if (layer == 0) {
 		_gbuf.rho_e = (float*)gm.add_buf(_name + "rho_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		if(grids._useSpinodal)
+		{
+			_gbuf.t1_e = (float*)gm.add_buf(_name + "t1_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.t2_e = (float*)gm.add_buf(_name + "t2_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.t3_e = (float*)gm.add_buf(_name + "t3_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.C11_e = (float*)gm.add_buf(_name + "C11_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.C12_e = (float*)gm.add_buf(_name + "C12_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.C13_e = (float*)gm.add_buf(_name + "C13_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.C22_e = (float*)gm.add_buf(_name + "C22_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.C23_e = (float*)gm.add_buf(_name + "C23_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.C33_e = (float*)gm.add_buf(_name + "C33_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.C44_e = (float*)gm.add_buf(_name + "C44_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.C55_e = (float*)gm.add_buf(_name + "C55_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.C66_e = (float*)gm.add_buf(_name + "C66_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		}
 		_gbuf.eActiveBits = (unsigned int*)gm.add_buf(_name + "eActiveBits", sizeof(unsigned int)*ebit._bitArray.size(), ebit._bitArray.data()); gbuf_size += sizeof(unsigned int) * ebit._bitArray.size();
 		_gbuf.eActiveChunkSum = (int*)gm.add_buf(_name + "eActiveChunkSum", sizeof(int)*ebit._chunkSat.size(), ebit._chunkSat.data()); gbuf_size += sizeof(int) * ebit._chunkSat.size();
 		_gbuf.nword_ebits = ebit._bitArray.size();
@@ -1637,6 +1707,49 @@ size_t grid::Grid::build(
 	// allocate sensitivity buffer on first grid
 	if (_layer == 0) {
 		_gbuf.g_sens = (float*)gm.add_buf(_name + " g_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		_gbuf.g_sens_vol = (float*)gm.add_buf(_name + " g_sens_vol ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		if(grids._useSpinodal)
+        {
+			_gbuf.g_sens_t1 = (float*)gm.add_buf(_name + " g_sens_t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_t2 = (float*)gm.add_buf(_name + " g_sens_t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_t3 = (float*)gm.add_buf(_name + " g_sens_t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C11r = (float*)gm.add_buf(_name + " g_sens_C11r ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C12r = (float*)gm.add_buf(_name + " g_sens_C12r ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C13r = (float*)gm.add_buf(_name + " g_sens_C13r ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C22r = (float*)gm.add_buf(_name + " g_sens_C22r ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C23r = (float*)gm.add_buf(_name + " g_sens_C23r ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C33r = (float*)gm.add_buf(_name + " g_sens_C33r ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C44r = (float*)gm.add_buf(_name + " g_sens_C44r ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C55r = (float*)gm.add_buf(_name + " g_sens_C55r ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C66r = (float*)gm.add_buf(_name + " g_sens_C66r ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C11t1 = (float*)gm.add_buf(_name + " g_sens_C11t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C12t1 = (float*)gm.add_buf(_name + " g_sens_C12t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C13t1 = (float*)gm.add_buf(_name + " g_sens_C13t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C22t1 = (float*)gm.add_buf(_name + " g_sens_C22t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C23t1 = (float*)gm.add_buf(_name + " g_sens_C23t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C33t1 = (float*)gm.add_buf(_name + " g_sens_C33t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C44t1 = (float*)gm.add_buf(_name + " g_sens_C44t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C55t1 = (float*)gm.add_buf(_name + " g_sens_C55t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C66t1 = (float*)gm.add_buf(_name + " g_sens_C66t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C11t2 = (float*)gm.add_buf(_name + " g_sens_C11t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C12t2 = (float*)gm.add_buf(_name + " g_sens_C12t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C13t2 = (float*)gm.add_buf(_name + " g_sens_C13t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C22t2 = (float*)gm.add_buf(_name + " g_sens_C22t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C23t2 = (float*)gm.add_buf(_name + " g_sens_C23t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C33t2 = (float*)gm.add_buf(_name + " g_sens_C33t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C44t2 = (float*)gm.add_buf(_name + " g_sens_C44t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C55t2 = (float*)gm.add_buf(_name + " g_sens_C55t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C66t2 = (float*)gm.add_buf(_name + " g_sens_C66t2 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C11t3 = (float*)gm.add_buf(_name + " g_sens_C11t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C12t3 = (float*)gm.add_buf(_name + " g_sens_C12t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C13t3 = (float*)gm.add_buf(_name + " g_sens_C13t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C22t3 = (float*)gm.add_buf(_name + " g_sens_C22t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C23t3 = (float*)gm.add_buf(_name + " g_sens_C23t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C33t3 = (float*)gm.add_buf(_name + " g_sens_C33t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C44t3 = (float*)gm.add_buf(_name + " g_sens_C44t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C55t3 = (float*)gm.add_buf(_name + " g_sens_C55t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+			_gbuf.g_sens_C66t3 = (float*)gm.add_buf(_name + " g_sens_C66t3 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+        }
 	}
 
 	// allocate bitflag buffer for vertex and element
@@ -1936,6 +2049,9 @@ void Grid::buildCoarsestSystem(void)
 
 	eigen2ConnectedMatlab("Klast", fullK);
 	eigen2ConnectedMatlab("Klastker", Klastkernel);
+	std::ofstream file("result/test/fullk.txt");
+	file << fullK;
+	file.close();
 }
 
 void Grid::stencil2matlab(const std::string& nam)
@@ -1988,6 +2104,10 @@ void Grid::solve_fem_host(void)
 	static Eigen::Matrix<double, -1, 1> uhost;
 
 	int nrow = nvlastrows;
+
+	saveGpuVecD("result/test/Fhost1.txt", _gbuf.F[0], n_gsvertices);
+	saveGpuVecD("result/test/Fhost2.txt", _gbuf.F[1], n_gsvertices);
+	saveGpuVecD("result/test/Fhost3.txt", _gbuf.F[2], n_gsvertices);
 	// copy data from device to host
 	for (int i = 0; i < 3; i++) {
 		v3host[i].resize(n_gsvertices);
@@ -2011,6 +2131,18 @@ void Grid::solve_fem_host(void)
 	//// solve
 	//uhost = solverhost.solve(fhost);
 	uhost = svd.solve(fhost);
+	std::ofstream f("result/test/f.txt");
+	f << fhost;
+	f.close();
+	std::ofstream u("result/test/u.txt");
+	u << uhost;
+	u.close();
+	std::ofstream v3("result/test/v3.txt");
+	for (int i = 0; i < v3host[0].size();++i)
+	{
+		v3 << v3host[0][i] << " " << v3host[1][i] << " " << v3host[2][i] << "\n";
+	}
+	v3.close();
 
 	// remove degenerate eigenvectors
 	//uhost = uhost - Klastkernel * (Klastkernel.transpose() * uhost);
@@ -2021,10 +2153,10 @@ void Grid::solve_fem_host(void)
 	//printf("-- coarse system error %lf\n", (fullK*uhost - fhost).norm());
 
 	// if preffered solver failed, try alternative solver
-	if (solverhost.info() != Eigen::Success) {
-		printf("-- \033[31mHost solver failed \033[0m\n");
-		uhost.fill(0);
-	}
+	// if (solverhost.info() != Eigen::Success) {
+	// 	printf("-- \033[31mHost solver failed \033[0m\n");
+	// 	uhost.fill(0);
+	// }
 
 	// pass solved displacement back to device
 	for (int j = 0; j < n_gsvertices; j++) {
@@ -2119,3 +2251,19 @@ void HierarchyGrid::update_stencil(void)
 }
 
 
+void saveGpuVec(const std::string file_path,float* x,int n)
+{
+	Eigen::VectorXf host(n);
+	// Eigen::Matrix<T, Eigen::Dynamic, 1> host(n);
+	cudaMemcpy(host.data(), x, n * sizeof(float), cudaMemcpyDeviceToHost);
+	std::ofstream file(file_path);
+	file << host;
+}
+void saveGpuVecD(const std::string file_path, double *x, int n)
+{
+	Eigen::VectorXd host(n);
+	// Eigen::Matrix<T, Eigen::Dynamic, 1> host(n);
+	cudaMemcpy(host.data(), x, n * sizeof(double), cudaMemcpyDeviceToHost);
+	std::ofstream file(file_path);
+	file << host;
+}

@@ -17,6 +17,15 @@
 using namespace grid;
 
 __constant__ double gTemplateMatrix[24][24];
+__constant__ double gTemplateMatrix11[24][24];
+__constant__ double gTemplateMatrix12[24][24];
+__constant__ double gTemplateMatrix13[24][24];
+__constant__ double gTemplateMatrix22[24][24];
+__constant__ double gTemplateMatrix23[24][24];
+__constant__ double gTemplateMatrix33[24][24];
+__constant__ double gTemplateMatrix44[24][24];
+__constant__ double gTemplateMatrix55[24][24];
+__constant__ double gTemplateMatrix66[24][24];
 __constant__ int* gV2E[8];
 __constant__ int* gV2Vfine[27];
 __constant__ int* gV2Vcoarse[8];
@@ -91,6 +100,177 @@ __device__ void loadTemplateMatrix(volatile double KE[24][24]) {
 		j = kid % 24;
 		if (i < 24) {
 			KE[i][j] = gTemplateMatrix[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadTemplateMatrix11(volatile float KE11[24][24]) {
+	int i = threadIdx.x / 24;
+	int j = threadIdx.x % 24;
+	if (i < 24) {
+		KE11[i][j] = gTemplateMatrix11[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 24) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 24;
+		j = kid % 24;
+		if (i < 24) {
+			KE11[i][j] = gTemplateMatrix11[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadTemplateMatrix12(volatile float KE12[24][24]) {
+	int i = threadIdx.x / 24;
+	int j = threadIdx.x % 24;
+	if (i < 24) {
+		KE12[i][j] = gTemplateMatrix12[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 24) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 24;
+		j = kid % 24;
+		if (i < 24) {
+			KE12[i][j] = gTemplateMatrix12[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadTemplateMatrix13(volatile float KE13[24][24]) {
+	int i = threadIdx.x / 24;
+	int j = threadIdx.x % 24;
+	if (i < 24) {
+		KE13[i][j] = gTemplateMatrix13[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 24) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 24;
+		j = kid % 24;
+		if (i < 24) {
+			KE13[i][j] = gTemplateMatrix13[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadTemplateMatrix22(volatile float KE22[24][24]) {
+	int i = threadIdx.x / 24;
+	int j = threadIdx.x % 24;
+	if (i < 24) {
+		KE22[i][j] = gTemplateMatrix22[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 24) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 24;
+		j = kid % 24;
+		if (i < 24) {
+			KE22[i][j] = gTemplateMatrix22[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadTemplateMatrix23(volatile float KE23[24][24]) {
+	int i = threadIdx.x / 24;
+	int j = threadIdx.x % 24;
+	if (i < 24) {
+		KE23[i][j] = gTemplateMatrix23[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 24) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 24;
+		j = kid % 24;
+		if (i < 24) {
+			KE23[i][j] = gTemplateMatrix23[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadTemplateMatrix33(volatile float KE33[24][24]) {
+	int i = threadIdx.x / 24;
+	int j = threadIdx.x % 24;
+	if (i < 24) {
+		KE33[i][j] = gTemplateMatrix33[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 24) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 24;
+		j = kid % 24;
+		if (i < 24) {
+			KE33[i][j] = gTemplateMatrix33[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadTemplateMatrix44(volatile float KE44[24][24]) {
+	int i = threadIdx.x / 24;
+	int j = threadIdx.x % 24;
+	if (i < 24) {
+		KE44[i][j] = gTemplateMatrix44[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 24) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 24;
+		j = kid % 24;
+		if (i < 24) {
+			KE44[i][j] = gTemplateMatrix44[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadTemplateMatrix55(volatile float KE55[24][24]) {
+	int i = threadIdx.x / 24;
+	int j = threadIdx.x % 24;
+	if (i < 24) {
+		KE55[i][j] = gTemplateMatrix55[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 24) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 24;
+		j = kid % 24;
+		if (i < 24) {
+			KE55[i][j] = gTemplateMatrix55[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadTemplateMatrix66(volatile float KE66[24][24]) {
+	int i = threadIdx.x / 24;
+	int j = threadIdx.x % 24;
+	if (i < 24) {
+		KE66[i][j] = gTemplateMatrix66[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 24) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 24;
+		j = kid % 24;
+		if (i < 24) {
+			KE66[i][j] = gTemplateMatrix66[i][j];
 		}
 		nfill += blockDim.x;
 	}
@@ -273,18 +453,146 @@ __global__ void restrict_stencil_dyadic_OTFA_kernel(int nv_coarse, double* rxcoa
 	}
 }
 
+template<int BlockSize = 32 * 9>
+__global__ void restrict_stencil_dyadic_OTFA_spinodal_kernel(int nv_coarse, double* rxcoarse_, int nv_fine, float* rhofine, float* c11fine, float* c12fine, float* c13fine, float* c22fine, float* c23fine, float* c33fine, float* c44fine, float* c55fine, float* c66fine) {
+	int tid = blockIdx.x*blockDim.x + threadIdx.x;
+
+	//__shared__ int restrict_elements[64];
+	__shared__ float KE11[24][24];
+	__shared__ float KE12[24][24];
+	__shared__ float KE13[24][24];
+	__shared__ float KE22[24][24];
+	__shared__ float KE23[24][24];
+	__shared__ float KE33[24][24];
+	__shared__ float KE44[24][24];
+	__shared__ float KE55[24][24];
+	__shared__ float KE66[24][24];
+
+	// load template matrix from constant memory to shared memory
+	loadTemplateMatrix11(KE11);
+	loadTemplateMatrix12(KE12);
+	loadTemplateMatrix13(KE13);
+	loadTemplateMatrix22(KE22);
+	loadTemplateMatrix23(KE23);
+	loadTemplateMatrix33(KE33);
+	loadTemplateMatrix44(KE44);
+	loadTemplateMatrix55(KE55);
+	loadTemplateMatrix66(KE66);
+
+	int warpid = threadIdx.x / 32;
+	int warptid = threadIdx.x % 32;
+
+	int ke_id = tid / nv_coarse;
+	int vid = tid % nv_coarse;
+
+	if (ke_id >= 9) return;
+
+	GraftArray<double, 27, 9> rxCoarse(rxcoarse_, nv_coarse);
+
+	//__shared__ double coarseStencil[27][BlockSize / 32][32];
+	//initSharedMem(&coarseStencil[0][0][0], sizeof(coarseStencil) / sizeof(double));
+
+	double coarseStencil[27] = { 0. };
+
+	
+	//for (int i = 0; i < 27; i++) {
+	//	coarseStencil[i][warpid][warptid] = 0;
+	//}
+	
+
+	// reorder K3 in row major order 
+	int k3row = ke_id / 3;
+	int k3col = ke_id % 3;
+
+	double w[4] = { 1.0,1.0 / 2,1.0 / 4,1.0 / 8 };
+	double kc[27] = { 0. };
+
+	int ebit[2] = { 0 };
+
+	float power = power_penalty[0];
+
+	// traverse neighbor nodes on fine grid
+	for (int i = 0; i < 27; i++) {
+		int neipos[3] = { i % 3 + 1 ,i % 9 / 3 + 1 ,i / 9 + 1 };
+
+		int vn = gV2Vfine[i][vid];
+
+		if (vn == -1) continue;
+
+		// traverse the neighbor element of each neighbor nodes
+		for (int j = 0; j < 8; j++) {
+			int epos[3] = { neipos[0] + j % 2 - 1,neipos[1] + j % 4 / 2 - 1,neipos[2] + j / 4 - 1 };
+			int eposid = epos[0] + epos[1] * 4 + epos[2] * 16;
+			if (read_gbit(ebit, eposid)) continue;
+			set_gbit(ebit, eposid);
+			// float rho_p = 0;
+			int eid = gVfine2Efine[j][vn];
+			if (eid == -1) continue;
+			// rho_p = powf(rhofine[eid], power);
+			// traverse vertex of neighbor elements (rows of element matrix)
+			for (int vi = 0; vi < 8; vi++) {
+				int vipos[3] = { epos[0] + vi % 2,epos[1] + vi % 4 / 2,epos[2] + vi / 4 };
+				int wipos[3] = { abs(vipos[0] - 2) , abs(vipos[1] - 2) , abs(vipos[2] - 2) };
+				if (wipos[0] >= 2 || wipos[1] >= 2 || wipos[2] >= 2) continue;
+				int wiid = wipos[0] + wipos[1] + wipos[2];
+				if (wiid >= 4) continue;
+				double wi_p = w[wiid];
+
+				// traverse another vertex of neighbor element (cols of element matrix), compute Ke 3x3
+				for (int vj = 0; vj < 8; vj++) {
+					int vjpos[3] = { epos[0] + vj % 2,epos[1] + vj % 4 / 2,epos[2] + vj / 4 };
+					double ke = 0;
+					// double wk = wi_p * KE[vi * 3 + k3row][vj * 3 + k3col];
+                    double wk = wi_p * (
+                    c11fine[eid] * KE11[vi * 3 + k3row][vj * 3 + k3col] + c12fine[eid] * KE12[vi * 3 + k3row][vj * 3 + k3col] + 
+                    c13fine[eid] * KE13[vi * 3 + k3row][vj * 3 + k3col] + c22fine[eid] * KE22[vi * 3 + k3row][vj * 3 + k3col] + 
+                    c23fine[eid] * KE23[vi * 3 + k3row][vj * 3 + k3col] + c33fine[eid] * KE33[vi * 3 + k3row][vj * 3 + k3col] + 
+                    c44fine[eid] * KE44[vi * 3 + k3row][vj * 3 + k3col] + c55fine[eid] * KE55[vi * 3 + k3row][vj * 3 + k3col] + 
+                    c66fine[eid] * KE66[vi * 3 + k3row][vj * 3 + k3col]
+                    );
+
+					// scatter 3x3 Ke to coarse nodes, traverse coarse nodes
+					for (int vsplit = 0; vsplit < 27; vsplit++) {
+						int vsplitpos[3] = { vsplit % 3 * 2, vsplit % 9 / 3 * 2, vsplit / 9 * 2 };
+						int wspos[3] = { abs(vsplitpos[0] - vjpos[0]), abs(vsplitpos[1] - vjpos[1]), abs(vsplitpos[2] - vjpos[2]) };
+						if (wspos[0] >= 2 || wspos[1] >= 2 || wspos[2] >= 2) continue;
+						int wsid = wspos[0] + wspos[1] + wspos[2];
+						double wkw = wk * w[wsid];
+						coarseStencil[vsplit] += wkw;
+					}
+				}
+			}
+		}
+
+	}
+
+	for (int i = 0; i < 27; i++) {
+		//rxCoarse[i][ke_id][vid] = coarseStencil[i][warpid][warptid];
+		rxCoarse[i][ke_id][vid] = coarseStencil[i];
+	}
+}
+
 void HierarchyGrid::restrict_stencil_dyadic(Grid& dstcoarse, Grid& srcfine)
 {
 	dstcoarse.use_grid();
 	size_t grid_size, block_size;
 	constexpr int BlockSize = 32 * 6;
 	if (dstcoarse._layer == 0 && srcfine._layer == 1) {
+		std::cout << "daydic otfa" << std::endl;
 		make_kernel_param(&grid_size, &block_size, dstcoarse.n_gsvertices * 9, BlockSize);
-		restrict_stencil_dyadic_OTFA_kernel<BlockSize> << <grid_size, block_size >> > (dstcoarse.n_gsvertices, dstcoarse._gbuf.rxStencil, srcfine.n_gsvertices, dstcoarse._gbuf.rho_e);
+		if(_useSpinodal)
+		{
+            restrict_stencil_dyadic_OTFA_spinodal_kernel<BlockSize> << <grid_size, block_size >> > (dstcoarse.n_gsvertices, dstcoarse._gbuf.rxStencil, srcfine.n_gsvertices, srcfine._gbuf.rho_e, srcfine._gbuf.C11_e, srcfine._gbuf.C12_e, srcfine._gbuf.C13_e, srcfine._gbuf.C22_e, srcfine._gbuf.C23_e, srcfine._gbuf.C33_e, srcfine._gbuf.C44_e, srcfine._gbuf.C55_e, srcfine._gbuf.C66_e);
+		}
+		else
+		{
+			restrict_stencil_dyadic_OTFA_kernel<BlockSize> << <grid_size, block_size >> > (dstcoarse.n_gsvertices, dstcoarse._gbuf.rxStencil, srcfine.n_gsvertices, srcfine._gbuf.rho_e);
+		}
 		cudaDeviceSynchronize();
 		cuda_error_check;
 	}
 	else {
+		std::cout << "dyadic general" << std::endl;
 		make_kernel_param(&grid_size, &block_size, dstcoarse.n_gsvertices * 9, BlockSize);
 		restrict_stencil_dyadic_kernel<BlockSize> << <grid_size, block_size >> > (dstcoarse.n_gsvertices, dstcoarse._gbuf.rxStencil, srcfine.n_gsvertices, srcfine._gbuf.rxStencil);
 		cudaDeviceSynchronize();
@@ -505,6 +813,147 @@ __global__ void restrict_stencil_nondyadic_OTFA_WS_kernel(int nv_coarse, double*
 	}
 }
 
+template<int BlockSize = 32 * 9>
+__global__ void restrict_stencil_nondyadic_OTFA_WS_spinodal_kernel(int nv_coarse, double* rxcoarse_, int nv_fine, float* rhofine, int* vfineflag,
+float* c11fine, float* c12fine, float* c13fine, float* c22fine, float* c23fine, float* c33fine, float* c44fine, float* c55fine, float* c66fine) {
+	int tid = blockDim.x*blockIdx.x + threadIdx.x;
+	int warpid = threadIdx.x / 32;
+	int warptid = threadIdx.x % 32;
+
+
+	GraftArray<double, 27, 9> rxCoarse(rxcoarse_, nv_coarse);
+
+    // __shared__ double KE[24][24];
+	__shared__ float KE11[24][24];
+    __shared__ float KE12[24][24];
+	__shared__ float KE13[24][24];
+	__shared__ float KE22[24][24];
+	__shared__ float KE23[24][24];
+	__shared__ float KE33[24][24];
+	__shared__ float KE44[24][24];
+	__shared__ float KE55[24][24];
+	__shared__ float KE66[24][24];
+	__shared__ double W[4][4][4];
+	//__shared__ double coarseStencil[27][BlockSize / 32][32];
+
+	// load template matrix from constant memory to shared memory
+    // loadTemplateMatrix(KE);
+	loadTemplateMatrix11(KE11);
+	loadTemplateMatrix12(KE12);
+	loadTemplateMatrix13(KE13);
+	loadTemplateMatrix22(KE22);
+	loadTemplateMatrix23(KE23);
+	loadTemplateMatrix33(KE33);
+	loadTemplateMatrix44(KE44);
+	loadTemplateMatrix55(KE55);
+	loadTemplateMatrix66(KE66);
+
+	// compute weight
+	if (threadIdx.x < 64) {
+		int i = threadIdx.x % 4;
+		int j = threadIdx.x % 16 / 4;
+		int k = threadIdx.x / 16;
+		W[k][j][i] = (4 - i)*(4 - j)*(4 - k) / 64.f;
+	}
+	__syncthreads();
+	
+	// init coarseStencil
+	//initSharedMem(&coarseStencil[0][0][0], sizeof(coarseStencil) / sizeof(double));
+	double coarseStencil[27] = { 0. };
+
+	int ke_id = tid / nv_coarse;
+
+	int vid = tid % nv_coarse;
+
+	if (ke_id >= 9) return;
+
+	//int flagword = vcoarseflag[vid];
+
+	//if (flagword & Grid::Bitmask::mask_invalid) return;
+
+	// reorder K3 in row major order
+	int k3row = ke_id / 3;
+	int k3col = ke_id % 3;
+
+	float power = power_penalty[0];
+
+	// traverse neighbor nodes of fine element center (which is the vertex on fine fine grid)
+	for (int i = 0; i < 64; i++) {
+		int i2[3] = { (i % 4) * 2 + 1 ,(i % 16 / 4) * 2 + 1 ,(i / 16) * 2 + 1 };
+		//int m2 = i2[0] + i2[1] + i2[2] - 3;
+
+		// get fine element center vertex
+		int vn = gV2VfineC[i][vid];
+
+		if (vn == -1) continue;
+
+		// should traverse 7x7x7 neigbor nodes, and sum their weighted stencil, to reduce bandwidth, we traverse 8x8x8 elements 
+		// traverse the neighbor fine fine element of this vertex and assembly the element matrices
+		for (int j = 0; j < 8; j++) {
+			int efineid = gVfine2Efine[j][vn];
+
+			if (efineid == -1) continue;
+
+			// float rho_p = powf(rhofine[efineid], power);
+
+			int epos[3] = { i2[0] + j % 2 - 1,i2[1] + j % 4 / 2 - 1,i2[2] + j / 4 - 1 };
+
+			// prefecth the flag of eight vertex
+			bool vfix[8];
+			for (int k = 0; k < 8; k++) {
+				int vklid = j % 2 + k % 2 +
+					(j / 2 % 2 + k / 2 % 2) * 3 +
+					(j / 4 + k / 4) * 9;
+				int vkvid = gVfine2Vfine[vklid][vn];
+				if (vkvid == -1)printf("-- error in stencil restriction\n");
+				int vkflag = vfineflag[vkvid];
+				vfix[k] = vkflag & Grid::Bitmask::mask_supportnodes;
+			}
+
+			// traverse the vertex of neighbor element (rows of element matrix), compute the weight on this vertex 
+			for (int ki = 0; ki < 8; ki++) {
+				int vipos[3] = { epos[0] + ki % 2,epos[1] + ki % 4 / 2,epos[2] + ki / 4 };
+				int wipos[3] = { abs(vipos[0] - 4),abs(vipos[1] - 4),abs(vipos[2] - 4) };
+				if (wipos[0] >= 4 || wipos[1] >= 4 || wipos[2] >= 4) continue;
+				double wi = W[wipos[0]][wipos[1]][wipos[2]];
+				double w_ki = wi;
+
+				// traverse another vertex of neighbor element (cols of element matrix), get the 3x3 Ke and multiply the row weights
+				for (int kj = 0; kj < 8; kj++) {
+					int kjpos[3] = { epos[0] + kj % 2 , epos[1] + kj % 4 / 2 , epos[2] + kj / 4 };
+					// double wk = w_ki * KE[ki * 3 + k3row][kj * 3 + k3col];
+                    double wk = w_ki * (
+                    c11fine[efineid] * KE11[ki * 3 + k3row][kj * 3 + k3col] + c12fine[efineid] * KE12[ki * 3 + k3row][kj * 3 + k3col] + 
+                    c13fine[efineid] * KE13[ki * 3 + k3row][kj * 3 + k3col] + c22fine[efineid] * KE22[ki * 3 + k3row][kj * 3 + k3col] + 
+                    c23fine[efineid] * KE23[ki * 3 + k3row][kj * 3 + k3col] + c33fine[efineid] * KE33[ki * 3 + k3row][kj * 3 + k3col] + 
+                    c44fine[efineid] * KE44[ki * 3 + k3row][kj * 3 + k3col] + c55fine[efineid] * KE55[ki * 3 + k3row][kj * 3 + k3col] + 
+                    c66fine[efineid] * KE66[ki * 3 + k3row][kj * 3 + k3col]);
+									
+					if (vfix[kj] || vfix[ki]) {
+						wk = 0;
+						if (ki == kj && k3row == k3col) {
+							wk = wi * DIRICHLET_DIAGONAL_WEIGHT;
+						}
+					}
+
+					//  the weighted element matrix should split to coarse vertex, traverse the coarse vertices and split 3x3 Ke to coarse vertex by splitting weights
+					for (int vsplit = 0; vsplit < 27; vsplit++) {
+						int vsplitpos[3] = { vsplit % 3 * 4, vsplit % 9 / 3 * 4,vsplit / 9 * 4 };
+						int wjpos[3] = { abs(vsplitpos[0] - kjpos[0]), abs(vsplitpos[1] - kjpos[1]), abs(vsplitpos[2] - kjpos[2]) };
+						if (wjpos[0] >= 4 || wjpos[1] >= 4 || wjpos[2] >= 4) continue;
+						double wkw = wk * W[wjpos[0]][wjpos[1]][wjpos[2]];
+						coarseStencil[vsplit]/*[warpid][warptid]*/ += wkw;
+					}
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < 27; i++) {
+		rxCoarse[i][ke_id][vid] = coarseStencil[i]/*[warpid][warptid]*/;
+	}
+}
+
 void HierarchyGrid::restrict_stencil_nondyadic(Grid& dstcoarse, Grid& srcfine)
 {
 	if (dstcoarse._layer != 2 || srcfine._layer != 0) {
@@ -516,7 +965,10 @@ void HierarchyGrid::restrict_stencil_nondyadic(Grid& dstcoarse, Grid& srcfine)
 	constexpr int BlockSize = 32 * 4;
 	size_t grid_size, block_size;
 	make_kernel_param(&grid_size, &block_size, dstcoarse.n_gsvertices * 9, BlockSize);
-	if (_mode == no_support_constrain_force_direction || _mode == no_support_free_force) {
+	if (_useSpinodal && (_mode == with_support_constrain_force_direction || _mode == with_support_free_force)) {
+        restrict_stencil_nondyadic_OTFA_WS_spinodal_kernel<BlockSize> << <grid_size, block_size >> > (dstcoarse.n_gsvertices, dstcoarse._gbuf.rxStencil, srcfine.n_gsvertices, srcfine._gbuf.rho_e, srcfine._gbuf.vBitflag, srcfine._gbuf.C11_e, srcfine._gbuf.C12_e, srcfine._gbuf.C13_e, srcfine._gbuf.C22_e, srcfine._gbuf.C23_e, srcfine._gbuf.C33_e, srcfine._gbuf.C44_e, srcfine._gbuf.C55_e, srcfine._gbuf.C66_e);
+    }
+	else if (_mode == no_support_constrain_force_direction || _mode == no_support_free_force) {
 		restrict_stencil_nondyadic_OTFA_NS_kernel<BlockSize> << <grid_size, block_size >> > (dstcoarse.n_gsvertices, dstcoarse._gbuf.rxStencil, srcfine.n_gsvertices, srcfine._gbuf.rho_e, srcfine._gbuf.vBitflag);
 	}
 	else if (_mode == with_support_constrain_force_direction || _mode == with_support_free_force) {
@@ -1065,7 +1517,182 @@ _blocksum:
 
 }
 
-void Grid::gs_relax(int n_times)
+template<int BlockSize = 32 * 8>
+__global__ void gs_relax_OTFA_WS_spinodal_kernel(int nv_gs, int gs_offset, float* rholist, float* c11list, float* c12list, float* c13list, float* c22list, float* c23list, float* c33list, float* c44list, float* c55list, float* c66list) {
+	int tid = blockIdx.x*blockDim.x + threadIdx.x;
+
+	__shared__ float KE11[24][24];
+	__shared__ float KE12[24][24];
+	__shared__ float KE13[24][24];
+	__shared__ float KE22[24][24];
+	__shared__ float KE23[24][24];
+	__shared__ float KE33[24][24];
+	__shared__ float KE44[24][24];
+	__shared__ float KE55[24][24];
+	__shared__ float KE66[24][24];
+
+	__shared__ double sumKeU[3][4][32];
+
+	__shared__ double sumS[9][4][32];
+
+	// load template matrix from constant memory to shared memory
+	loadTemplateMatrix11(KE11);
+	loadTemplateMatrix12(KE12);
+	loadTemplateMatrix13(KE13);
+	loadTemplateMatrix22(KE22);
+	loadTemplateMatrix23(KE23);
+	loadTemplateMatrix33(KE33);
+	loadTemplateMatrix44(KE44);
+	loadTemplateMatrix55(KE55);
+	loadTemplateMatrix66(KE66);
+
+	int warpId = threadIdx.x / 32;
+	int warpTid = threadIdx.x % 32;
+
+	double KeU[3] = { 0. };
+	double S[9] = { 0. };
+	double* pU[3] = { gU[0],gU[1],gU[2] };
+
+	bool invalid_node = false;
+	// the id in a gs subset
+	int vid = blockIdx.x * 32 + warpTid;
+
+	// the id in total node set
+	vid += gs_offset;
+
+	int flag = gVflag[0][vid];
+	int eid;
+	double penalty = 0;
+	int vi = 7 - warpId;
+	bool viisfix;
+	int* pflags;
+
+	invalid_node |= flag & Grid::Bitmask::mask_invalid;
+	if (invalid_node) goto _blocksum;
+
+	eid = gV2E[warpId][vid];
+
+	if (eid != -1)
+        ;
+		// penalty = powf(rholist[eid], power_penalty[0]);
+	else
+		goto _blocksum;
+
+	if (gV2V[13][vid] == -1) {
+		invalid_node = true;
+		goto _blocksum;
+	}
+
+	viisfix = flag & grid::Grid::Bitmask::mask_supportnodes;
+
+	pflags = gVflag[0];
+
+	// compute KU and S 
+	for (int vj = 0; vj < 8; vj++) {
+		// vjpos = epos + vjoffset
+		int vjpos[3] = {
+			vj % 2 + warpId % 2,
+			vj % 4 / 2 + warpId % 4 / 2,
+			vj / 4 + warpId / 4
+		};
+		int vj_lid = vjpos[0] + vjpos[1] * 3 + vjpos[2] * 9;
+		int vj_vid = gV2V[vj_lid][vid];
+		if (vj_vid == -1) continue;
+		double U[3] = { pU[0][vj_vid],pU[1][vj_vid],pU[2][vj_vid] };
+
+		// deal with fixed boundary
+		int vjflag = pflags[vj_vid];
+		bool vjisfix = vjflag & grid::Grid::Bitmask::mask_supportnodes;
+
+		if (vj_lid != 13 && !vjisfix) {
+			for (int k = 0; k < 3; k++) {
+				for (int j = 0; j < 3; j++) {
+					// KeU[k] += penalty * KE[k + vi * 3][j + vj * 3] * U[j];
+                    KeU[k] += U[j] * (
+                    c11list[eid] * KE11[k + vi * 3][j + vj * 3] + c12list[eid] * KE12[k + vi * 3][j + vj * 3] + 
+                    c13list[eid] * KE13[k + vi * 3][j + vj * 3] + c22list[eid] * KE22[k + vi * 3][j + vj * 3] + 
+                    c23list[eid] * KE23[k + vi * 3][j + vj * 3] + c33list[eid] * KE33[k + vi * 3][j + vj * 3] + 
+                    c44list[eid] * KE44[k + vi * 3][j + vj * 3] + c55list[eid] * KE55[k + vi * 3][j + vj * 3] + 
+                    c66list[eid] * KE66[k + vi * 3][j + vj * 3]
+                    );
+				}
+			}
+		}
+		if (vj_lid == 13) {
+			if (!vjisfix) {
+				for (int i = 0; i < 9; i++) {
+					// S[i] = penalty * KE[vi * 3 + i / 3][vi * 3 + i % 3];
+                    S[i] = 
+                    c11list[eid] * KE11[vi * 3 + i / 3][vi * 3 + i % 3] + c12list[eid] * KE12[vi * 3 + i / 3][vi * 3 + i % 3] + 
+                    c13list[eid] * KE13[vi * 3 + i / 3][vi * 3 + i % 3] + c22list[eid] * KE22[vi * 3 + i / 3][vi * 3 + i % 3] + 
+                    c23list[eid] * KE23[vi * 3 + i / 3][vi * 3 + i % 3] + c33list[eid] * KE33[vi * 3 + i / 3][vi * 3 + i % 3] + 
+                    c44list[eid] * KE44[vi * 3 + i / 3][vi * 3 + i % 3] + c55list[eid] * KE55[vi * 3 + i / 3][vi * 3 + i % 3] + 
+                    c66list[eid] * KE66[vi * 3 + i / 3][vi * 3 + i % 3];
+				}
+			}
+			else {
+				S[0] = 1; S[4] = 1; S[8] = 1;
+			}
+		}
+	}
+
+	if (viisfix) {
+		KeU[0] = 0; KeU[1] = 0; KeU[2] = 0;
+	}
+
+_blocksum:
+
+	if (warpId >= 4) {
+		for (int i = 0; i < 3; i++) {
+			sumKeU[i][warpId - 4][warpTid] = KeU[i];
+		}
+		for (int i = 0; i < 9; i++) {
+			sumS[i][warpId - 4][warpTid] = S[i];
+		}
+	}
+	__syncthreads();
+
+	if (warpId < 4) {
+		for (int i = 0; i < 3; i++) {
+			sumKeU[i][warpId][warpTid] += KeU[i];
+		}
+		for (int i = 0; i < 9; i++) {
+			sumS[i][warpId][warpTid] += S[i];
+		}
+	}
+	__syncthreads();
+
+	if (warpId < 2) {
+		for (int i = 0; i < 3; i++) {
+			sumKeU[i][warpId][warpTid] += sumKeU[i][warpId + 2][warpTid];
+		}
+		for (int i = 0; i < 9; i++) {
+			sumS[i][warpId][warpTid] += sumS[i][warpId + 2][warpTid];
+		}
+	}
+	__syncthreads();
+
+	if (warpId < 1 && !invalid_node) {
+		for (int i = 0; i < 3; i++) {
+			KeU[i] = sumKeU[i][0][warpTid] + sumKeU[i][1][warpTid];
+		}
+		for (int i = 0; i < 9; i++) {
+			S[i] = sumS[i][0][warpTid] + sumS[i][1][warpTid];
+		}
+
+		double newU[3] = { pU[0][vid],pU[1][vid],pU[2][vid] };
+		double(*s)[3] = reinterpret_cast<double(*)[3]>(S);
+		// s[][] is row major 
+		newU[0] = (gF[0][vid] - s[0][1] * newU[1] - s[0][2] * newU[2] - KeU[0]) / s[0][0];
+		newU[1] = (gF[1][vid] - s[1][0] * newU[0] - s[1][2] * newU[2] - KeU[1]) / s[1][1];
+		newU[2] = (gF[2][vid] - s[2][0] * newU[0] - s[2][1] * newU[1] - KeU[2]) / s[2][2];
+		pU[0][vid] = newU[0]; pU[1][vid] = newU[1]; pU[2][vid] = newU[2];
+
+	}
+
+}
+
+void Grid::gs_relax(int n_times, bool use_spinodal)
 {
 	if (is_dummy()) return;
 	use_grid();
@@ -1077,7 +1704,10 @@ void Grid::gs_relax(int n_times)
 				constexpr int BlockSize = 32 * 8;
 				size_t grid_size, block_size;
 				make_kernel_param(&grid_size, &block_size, gs_num[i] * 8, BlockSize);
-				if (_mode == no_support_constrain_force_direction || _mode == no_support_free_force) {
+				if (use_spinodal && (_mode == with_support_constrain_force_direction || _mode == with_support_free_force)){
+                    gs_relax_OTFA_WS_spinodal_kernel<BlockSize> << <grid_size, block_size >> > (gs_num[i], gs_offset, _gbuf.rho_e, _gbuf.C11_e, _gbuf.C12_e, _gbuf.C13_e, _gbuf.C22_e, _gbuf.C23_e, _gbuf.C33_e, _gbuf.C44_e, _gbuf.C55_e, _gbuf.C66_e);
+                }
+				else if (_mode == no_support_constrain_force_direction || _mode == no_support_free_force) {
 					gs_relax_OTFA_NS_kernel<BlockSize> << <grid_size, block_size >> > (gs_num[i], gs_offset, _gbuf.rho_e);
 				}
 				else if (_mode == with_support_constrain_force_direction || _mode == with_support_free_force) {
@@ -1556,6 +2186,87 @@ __global__ void update_residual_OTFA_WS_kernel(int nv, float* rholist) {
 	}
 }
 
+__global__ void update_residual_OTFA_WS_spinodal_kernel(int nv, float* rholist, float* c11list, float* c12list, float* c13list, float* c22list, float* c23list, float* c33list, float* c44list, float* c55list, float* c66list) {
+
+	__shared__ float KE11[24][24];
+	__shared__ float KE12[24][24];
+	__shared__ float KE13[24][24];
+	__shared__ float KE22[24][24];
+	__shared__ float KE23[24][24];
+	__shared__ float KE33[24][24];
+	__shared__ float KE44[24][24];
+	__shared__ float KE55[24][24];
+	__shared__ float KE66[24][24];
+
+	int tid = blockIdx.x*blockDim.x + threadIdx.x;
+
+	loadTemplateMatrix11(KE11);
+	loadTemplateMatrix12(KE12);
+	loadTemplateMatrix13(KE13);
+	loadTemplateMatrix22(KE22);
+	loadTemplateMatrix23(KE23);
+	loadTemplateMatrix33(KE33);
+	loadTemplateMatrix44(KE44);
+	loadTemplateMatrix55(KE55);
+	loadTemplateMatrix66(KE66);
+
+	if (tid >= nv) return;
+
+	int vid = tid;
+
+	// add fixed flag check
+	bool vfix[27], vload[27];
+	int v2v[27];
+	loadNeighborNodesAndFlags(vid, v2v, vfix, vload);
+
+	double KU[3] = { 0.,0.,0. };
+	float power = power_penalty[0];
+	for (int i = 0; i < 8; i++) {
+		int eid = gV2E[i][vid];
+		if (eid == -1) continue;
+		// double penalty = powf(rholist[eid], power);
+		int vi = 7 - i;
+		for (int vj = 0; vj < 8; vj++) {
+			int vjpos[3] = {
+				vj % 2 + i % 2,
+				vj % 4 / 2 + i % 4 / 2,
+				vj / 4 + i / 4
+			};
+			int vj_lid = vjpos[0] + vjpos[1] * 3 + vjpos[2] * 9;
+			int vj_vid = v2v[vj_lid];
+			if (vj_vid == -1) {
+				// DEBUG
+				printf("-- error in update residual otfa\n");
+				continue;
+			}
+			double u[3] = { gU[0][vj_vid],gU[1][vj_vid],gU[2][vj_vid] };
+			if (vfix[vj_lid]) {
+				u[0] = 0; u[1] = 0; u[2] = 0;
+			}
+			for (int row = 0; row < 3; row++) {
+				for (int col = 0; col < 3; col++) {
+					// KU[row] += penalty * KE[row + vi * 3][col + vj * 3] * u[col];
+                    KU[row] += u[col] * (
+                    c11list[eid] * KE11[row + vi * 3][col + vj * 3] + c12list[eid] * KE12[row + vi * 3][col + vj * 3] + 
+                    c13list[eid] * KE13[row + vi * 3][col + vj * 3] + c22list[eid] * KE22[row + vi * 3][col + vj * 3] + 
+                    c23list[eid] * KE23[row + vi * 3][col + vj * 3] + c33list[eid] * KE33[row + vi * 3][col + vj * 3] + 
+                    c44list[eid] * KE44[row + vi * 3][col + vj * 3] + c55list[eid] * KE55[row + vi * 3][col + vj * 3] + 
+                    c66list[eid] * KE66[row + vi * 3][col + vj * 3]
+                    );
+				}
+			}
+		}
+	}
+
+	if (vfix[13]) {
+		KU[0] = 0; KU[1] = 0; KU[2] = 0;
+	}
+
+	for (int i = 0; i < 3; i++) {
+		gR[i][vid] = gF[i][vid] - KU[i];
+	}
+}
+
 template<int SetBlockSize = 32 * 8>
 __global__ void update_residual_OTFA_WS_kernel_1(int nv, float* rholist) {
 
@@ -1641,13 +2352,17 @@ __blocksum:
 	}
 }
 
-void Grid::update_residual(void)
+void Grid::update_residual(bool use_spinodal)
 {
 	if (is_dummy()) return;
 	use_grid();
 	size_t grid_size, block_size;
 	if (_layer == 0) {
-		if (_mode == no_support_constrain_force_direction || _mode == no_support_free_force) {
+		if (use_spinodal && (_mode == with_support_constrain_force_direction || _mode == with_support_free_force)){
+            make_kernel_param(&grid_size, &block_size, n_gsvertices, 256);
+			update_residual_OTFA_WS_spinodal_kernel << <grid_size, block_size >> > (n_gsvertices, _gbuf.rho_e, _gbuf.C11_e, _gbuf.C12_e, _gbuf.C13_e, _gbuf.C22_e, _gbuf.C23_e, _gbuf.C33_e, _gbuf.C44_e, _gbuf.C55_e, _gbuf.C66_e);
+        }
+		else if (_mode == no_support_constrain_force_direction || _mode == no_support_free_force) {
 			make_kernel_param(&grid_size, &block_size, n_gsvertices, 512);
 			update_residual_OTFA_NS_kernel << <grid_size, block_size >> > (n_gsvertices, _gbuf.rho_e);
 		}
@@ -2436,6 +3151,49 @@ void Grid::filterSensitivity(double radii)
 	cuda_error_check;
 }
 
+void Grid::filterSensitivitySpinodal(double radii)
+{
+	if (_layer != 0) return;
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, _gbuf.nword_ebits, 512);
+	auto fr = [=] __device__(float r) {
+		float r2 = r * r;
+		return 1 - 6 * r2 + 8 * r2 * r - 3 * r2 *r2;
+	};
+	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
+	float* g_sens_copy = (float*)getTempBuf(sizeof(float)* n_gselements);
+
+	cudaMemcpy(g_sens_copy, _gbuf.g_sens, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
+	init_array(_gbuf.g_sens, float{ 0 }, n_gselements);
+	filterSensitivity_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, g_sens_copy, _gbuf.g_sens, radii, fr, _gbuf.eidmap);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	cudaMemcpy(g_sens_copy, _gbuf.g_sens_t1, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
+	init_array(_gbuf.g_sens_t1, float{0}, n_gselements);
+	filterSensitivity_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, g_sens_copy, _gbuf.g_sens_t1, radii, fr, _gbuf.eidmap);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	cudaMemcpy(g_sens_copy, _gbuf.g_sens_t2, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
+	init_array(_gbuf.g_sens_t2, float{0}, n_gselements);
+	filterSensitivity_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, g_sens_copy, _gbuf.g_sens_t2, radii, fr, _gbuf.eidmap);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	cudaMemcpy(g_sens_copy, _gbuf.g_sens_t3, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
+	init_array(_gbuf.g_sens_t3, float{0}, n_gselements);
+	filterSensitivity_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, g_sens_copy, _gbuf.g_sens_t3, radii, fr, _gbuf.eidmap);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	cudaMemcpy(g_sens_copy, _gbuf.g_sens_vol, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
+	init_array(_gbuf.g_sens_vol, float{0}, n_gselements);
+	filterSensitivity_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, g_sens_copy, _gbuf.g_sens_vol, radii, fr, _gbuf.eidmap);
+	cudaDeviceSynchronize();
+	cuda_error_check;	
+}
+
 __global__ void applyK_OTFA_kernel(int nv, devArray_t<double*, 3> u, devArray_t<double*, 3> f, float* rholist, bool use_support = true) {
 	int tid = blockIdx.x*blockDim.x + threadIdx.x;
 
@@ -3082,6 +3840,14 @@ void Grid::setV2V_g(int vreso, BitSAT<unsigned int>& vrtsat, int* v2v[27])
 void Grid::init_rho(double rh0)
 {
 	init_array(_gbuf.rho_e, float(rh0), n_rho());
+}
+
+void Grid::init_design_variable(double rh0,double t1_0,double t2_0,double t3_0)
+{
+	init_array(_gbuf.rho_e,float(rh0),n_rho());
+	init_array(_gbuf.t1_e,float(t1_0),n_rho());
+	init_array(_gbuf.t2_e,float(t2_0),n_rho());
+	init_array(_gbuf.t3_e,float(t3_0),n_rho());
 }
 
 __global__ void computeNodePos_kernel(int n_word, int vreso, gBitSAT<unsigned int> vrtsat, devArray_t<double, 3> orig, double eh, devArray_t<double*, 3> pos) {

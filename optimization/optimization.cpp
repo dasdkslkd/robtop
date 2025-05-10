@@ -32,7 +32,7 @@ void logParams(std::string file, std::string version_str, int argc, char** argv)
 void setParameters(
 	float volRatio, float volDecrease, float designStep, float filterRadi, float dampRatio, float powerPenal,
 	float min_density, int gridreso, float youngs_modulu, float poisson_ratio, float shell_width,
-	bool logdensity, bool logcompliance
+	bool logdensity, bool logcompliance, bool usespinodal, float target_compliance
 ) {
 	params.volume_ratio = volRatio;
 	params.volume_decrease = volDecrease;
@@ -44,6 +44,9 @@ void setParameters(
 	params.gridreso = gridreso;
 	params.youngs_modulu = youngs_modulu;
 	params.poisson_ratio = poisson_ratio;
+	params.use_spinodal=usespinodal;
+	params.target_compliance = target_compliance;
+	grids._useSpinodal = usespinodal;
 	grids.set_shell_width(shell_width);
 	grids.enable_logdensity(logdensity);
 	grids.enable_logcompliance(logcompliance);
@@ -687,6 +690,11 @@ void setBoundaryCondition(std::function<bool(double[3])> fixarea, std::function<
 void initDensities(double rho)
 {
 	grids[0]->init_rho(rho);
+}
+
+void initDesignVariables(double rho,double t1,double t2,double t3)
+{
+	grids[0]->init_design_variable(rho,t1,t2,t3);
 }
 
 void update_stencil(void)

@@ -8,7 +8,25 @@
 Scalar mu = default_poisson_ratio;
 Scalar E = default_youngs_modulus;
 Eigen::Matrix<Scalar, 6, 6> elastic_matrix;
+Eigen::Matrix<Scalar, 6, 6> elastic_matrix11;
+Eigen::Matrix<Scalar, 6, 6> elastic_matrix12;
+Eigen::Matrix<Scalar, 6, 6> elastic_matrix13;
+Eigen::Matrix<Scalar, 6, 6> elastic_matrix22;
+Eigen::Matrix<Scalar, 6, 6> elastic_matrix23;
+Eigen::Matrix<Scalar, 6, 6> elastic_matrix33;
+Eigen::Matrix<Scalar, 6, 6> elastic_matrix44;
+Eigen::Matrix<Scalar, 6, 6> elastic_matrix55;
+Eigen::Matrix<Scalar, 6, 6> elastic_matrix66;
 Eigen::Matrix<Scalar, 24, 24> Ke;
+Eigen::Matrix<Scalar, 24, 24> Ke11;
+Eigen::Matrix<Scalar, 24, 24> Ke12;
+Eigen::Matrix<Scalar, 24, 24> Ke13;
+Eigen::Matrix<Scalar, 24, 24> Ke22;
+Eigen::Matrix<Scalar, 24, 24> Ke23;
+Eigen::Matrix<Scalar, 24, 24> Ke33;
+Eigen::Matrix<Scalar, 24, 24> Ke44;
+Eigen::Matrix<Scalar, 24, 24> Ke55;
+Eigen::Matrix<Scalar, 24, 24> Ke66;
 
 Scalar* g_Ke;
 
@@ -123,6 +141,108 @@ void initTemplateMatrix(
 	eigen2ConnectedMatlab("RE", RE);
 }
 
+void initTemplateMatrixOrthotropy(Scalar element_len, gpu_manager_t& gm)
+{
+	elastic_matrix11=Eigen::Matrix<Scalar,6,6>::Zero();
+	elastic_matrix11(0,0)=1;
+	elastic_matrix12=Eigen::Matrix<Scalar,6,6>::Zero();
+	elastic_matrix12(0,1)=1;elastic_matrix12(1,0)=1;
+	elastic_matrix13=Eigen::Matrix<Scalar,6,6>::Zero();
+	elastic_matrix13(0,2)=1;elastic_matrix13(2,0)=1;
+	elastic_matrix22=Eigen::Matrix<Scalar,6,6>::Zero();
+	elastic_matrix22(1,1)=1;
+	elastic_matrix23=Eigen::Matrix<Scalar,6,6>::Zero();
+	elastic_matrix23(1,2)=1;elastic_matrix23(2,1)=1;
+	elastic_matrix33=Eigen::Matrix<Scalar,6,6>::Zero();
+	elastic_matrix33(2,2)=1;
+	elastic_matrix44=Eigen::Matrix<Scalar,6,6>::Zero();
+	elastic_matrix44(3,3)=1;
+	elastic_matrix55=Eigen::Matrix<Scalar,6,6>::Zero();
+	elastic_matrix55(4,4)=1;
+	elastic_matrix66=Eigen::Matrix<Scalar,6,6>::Zero();
+	elastic_matrix66(5,5)=1;
+
+	Eigen::Matrix<Scalar, 3, 1> gs_points[8];
+	
+	double p = sqrt(3) / 3;
+
+	for (int i = 0; i < 8; i++) {
+		int x = 2 * (i % 2) - 1;
+		int y = 2 * (i / 2 % 2) - 1;
+		int z = 2 * (i / 4) - 1;
+		gs_points[i][0] = (x * p + 1) / 2;
+		gs_points[i][1] = (y * p + 1) / 2;
+		gs_points[i][2] = (z * p + 1) / 2;
+	}
+
+	
+	Ke11.fill(0);
+	Ke12.fill(0);
+	Ke13.fill(0);
+	Ke22.fill(0);
+	Ke23.fill(0);
+	Ke33.fill(0);
+	Ke44.fill(0);
+	Ke55.fill(0);
+	Ke66.fill(0);
+	// Gauss Quadrature Point
+	for (int i = 0; i < 8; i++) {
+
+		Eigen::Matrix<Scalar, 3, 1> grad_N[8];
+
+		// Element Vertex Point
+		for (int k = 0; k < 8; k++) {
+			grad_N[k] = dN(k, element_len, gs_points[i]);
+		}
+
+		Eigen::Matrix<Scalar, 6, 24> B;
+
+		B.fill(0);
+
+		for (int a = 0; a < 3; a++) {
+			int offset = a;
+			for (int b = 0; b < 8; b++) {
+				B(a, offset) = grad_N[b][a];
+				offset += 3;
+			}
+		}
+		int offset = 0;
+		/// torsional strain tau
+		for (int b = 0; b < 8; b++) {
+			/// tau_yz
+			B(3, offset + 1) = grad_N[b].z();
+			B(3, offset + 2) = grad_N[b].y();
+			/// tau_xz
+			B(4, offset) = grad_N[b].z();
+			B(4, offset + 2) = grad_N[b].x();
+			/// tau_xy
+			B(5, offset) = grad_N[b].y();
+			B(5, offset + 1) = grad_N[b].x();
+
+			offset += 3;
+		}
+		Ke11 += B.transpose() * elastic_matrix11 * B;
+		Ke12 += B.transpose() * elastic_matrix12 * B;
+		Ke13 += B.transpose() * elastic_matrix13 * B;
+		Ke22 += B.transpose() * elastic_matrix22 * B;
+		Ke23 += B.transpose() * elastic_matrix23 * B;
+		Ke33 += B.transpose() * elastic_matrix33 * B;
+		Ke44 += B.transpose() * elastic_matrix44 * B;
+		Ke55 += B.transpose() * elastic_matrix55 * B;
+		Ke66 += B.transpose() * elastic_matrix66 * B;
+	}
+
+	Ke11 *= pow(element_len / 2, 3);
+	Ke12 *= pow(element_len / 2, 3);
+	Ke13 *= pow(element_len / 2, 3);
+	Ke22 *= pow(element_len / 2, 3);
+	Ke23 *= pow(element_len / 2, 3);
+	Ke33 *= pow(element_len / 2, 3);
+	Ke44 *= pow(element_len / 2, 3);
+	Ke55 *= pow(element_len / 2, 3);
+	Ke66 *= pow(element_len / 2, 3);
+}
+
 const Eigen::Matrix<Scalar, 24, 24>& getTemplateMatrix(void)
 {
 	return Ke;
@@ -131,6 +251,51 @@ const Eigen::Matrix<Scalar, 24, 24>& getTemplateMatrix(void)
 const Scalar* getTemplateMatrixElements(void)
 {
 	return Ke.data();
+}
+
+const Scalar* getTemplateMatrixElements11(void)
+{
+	return Ke11.data();
+}
+
+const Scalar* getTemplateMatrixElements12(void)
+{
+	return Ke12.data();
+}
+
+const Scalar* getTemplateMatrixElements13(void)
+{
+	return Ke13.data();
+}
+
+const Scalar* getTemplateMatrixElements22(void)
+{
+	return Ke22.data();
+}
+
+const Scalar* getTemplateMatrixElements23(void)
+{
+	return Ke23.data();
+}
+
+const Scalar* getTemplateMatrixElements33(void)
+{
+	return Ke33.data();
+}
+
+const Scalar* getTemplateMatrixElements44(void)
+{
+	return Ke44.data();
+}
+
+const Scalar* getTemplateMatrixElements55(void)
+{
+	return Ke55.data();
+}
+
+const Scalar* getTemplateMatrixElements66(void)
+{
+	return Ke66.data();
 }
 
 Scalar* getDeviceTemplateMatrix(void) {

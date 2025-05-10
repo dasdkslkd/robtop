@@ -44,6 +44,10 @@ public:
 
 	static void testDistributeForceOpt(void);
 
+	static void testSpinodalOpt(void);
+
+	static void spinodalTargetCompliance(void);
+
 	static void extractMeshFromDensity(void);
 
 	static void testModifiedPM(void);

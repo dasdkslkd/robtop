@@ -45,6 +45,10 @@ DEFINE_string(inputdensity, "", "input density field in VDB format, must much th
 
 DEFINE_string(testmesh, "", "test mesh to show stress or compliance");
 
+DEFINE_bool(usespinodal, false, "Whether to use spinodal as microstructure");
+
+DEFINE_double(target_compliance, 0., "The target spinodal ratio");
+
 dynamic_range::range_t* _parse_region_object(const rapidjson::GenericObject<false, rapidjson::Value>& rg) {
 	if (!rg.HasMember("type")) { printf("\033[31mError occurred in json parsing :A region should has member \"type\": \"box\"/\"sphere\"/\"halfspace\"...\033[0m"); exit(0); }
 	if (!rg["type"].IsString()) { printf("\033[31mError occurred in json parsing :type should be a string ...\033[0m"); exit(0); }
@@ -482,6 +486,8 @@ void output_option(void) {
 	std::cout << " =logcompliance    - - - - - - - - - - - - - - - -   " << (FLAGS_logcompliance ? "Yes" : "No") << std::endl;
 	std::cout << " =testname         - - - - - - - - - - - - - - - -   " << FLAGS_testname << std::endl;
 	std::cout << " =testmesh         - - - - - - - - - - - - - - - -   " << FLAGS_testmesh << std::endl;
+	std::cout << " =usespinodal         - - - - - - - - - - - - - - - -   " << FLAGS_usespinodal << std::endl;
+	std::cout << " =target_compliance- - - - - - - - - - - - - - - - - -   " << FLAGS_target_compliance << std::endl;
 }
 
 

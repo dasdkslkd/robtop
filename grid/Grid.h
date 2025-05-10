@@ -194,6 +194,18 @@ namespace grid {
 		std::string _name;
 		struct {
 			float* rho_e;
+			float* t1_e;
+			float* t2_e;
+			float* t3_e;
+            float* C11_e;
+            float* C12_e;
+            float* C13_e;
+            float* C22_e;
+            float* C23_e;
+            float* C33_e;
+            float* C44_e;
+            float* C55_e;
+            float* C66_e;
 			int * v2e[8];
 			int* v2vfine[27];
 			int* v2vcoarse[8];
@@ -209,6 +221,46 @@ namespace grid {
 			int nword_ebits;
 
 			float* g_sens;
+			float* g_sens_t1;
+            float* g_sens_t2;
+            float* g_sens_t3;
+            float* g_sens_C11r;
+			float* g_sens_C12r;
+			float* g_sens_C13r;
+			float* g_sens_C22r;
+			float* g_sens_C23r;
+			float* g_sens_C33r;
+			float* g_sens_C44r;
+			float* g_sens_C55r;
+			float* g_sens_C66r;
+			float* g_sens_C11t1;
+			float* g_sens_C12t1;
+			float* g_sens_C13t1;
+			float* g_sens_C22t1;
+			float* g_sens_C23t1;
+			float* g_sens_C33t1;
+			float* g_sens_C44t1;
+			float* g_sens_C55t1;
+			float* g_sens_C66t1;
+            float* g_sens_C11t2;
+			float* g_sens_C12t2;
+			float* g_sens_C13t2;
+			float* g_sens_C22t2;
+			float* g_sens_C23t2;
+			float* g_sens_C33t2;
+			float* g_sens_C44t2;
+			float* g_sens_C55t2;
+			float* g_sens_C66t2;
+            float* g_sens_C11t3;
+			float* g_sens_C12t3;
+			float* g_sens_C13t3;
+			float* g_sens_C22t3;
+			float* g_sens_C23t3;
+			float* g_sens_C33t3;
+			float* g_sens_C44t3;
+			float* g_sens_C55t3;
+			float* g_sens_C66t3;
+			float *g_sens_vol;
 
 			/*
 			  |_*_|_*_|_*_| * | * | * | * | * |
@@ -360,6 +412,8 @@ namespace grid {
 
 		void filterSensitivity(double radii);
 
+		void filterSensitivitySpinodal(double radii);
+
 		Eigen::Matrix<double, 3, 1> outwardNormal(double p[3]);
 
 		std::vector<int> getVflags(void);
@@ -412,7 +466,7 @@ namespace grid {
 			int * ebitflags
 		);
 
-		void gs_relax(int n_times = 1);
+		void gs_relax(int n_times = 1, bool use_spinodal = false);
 
 		//void gs_adjoint_relax(int n_times = 1);
 
@@ -426,7 +480,7 @@ namespace grid {
 
 		double compliance(void);
 
-		void update_residual(void);
+		void update_residual(bool use_spinodal = false);
 
 		//void update_adjoint_residual(void);
 
@@ -439,6 +493,8 @@ namespace grid {
 		double residual(void);
 
 		void init_rho(double rh0);
+
+		void init_design_variable(double rh0,double t1_0,double t2_0,double t3_0);
 
 		float volumeRatio(void);
 
@@ -558,6 +614,8 @@ namespace grid {
 
 		Mode _mode;
 
+		bool _useSpinodal=false;
+
 		//std::vector<float> _pcoords;
 		//std::vector<int> _trifaces;
 
@@ -649,6 +707,8 @@ namespace grid {
 
 		void writeDensity(const std::string& filename);
 
+		void writeDensitySpinodal();
+
 		void readDensity(const std::string& filename);
 
 		void writeSensitivity(const std::string& filename);
@@ -692,6 +752,10 @@ namespace grid {
 	};
 
 };
+
+void saveGpuVec(const std::string file_path, float *x, int n);
+
+void saveGpuVecD(const std::string file_path, double *x, int n);
 
 #endif
 

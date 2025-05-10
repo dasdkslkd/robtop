@@ -1,0 +1,1 @@
+gdb --args robtop-dbg -jsonfile=femur/config.json -meshfile=femur/femur.obj -outdir=./result/test/ -power_penalty=3 -volume_ratio=0.4 -filter_radius=2 -gridreso=128 -damp_ratio=0.5 -shell_width=1 -workmode=wscf -poisson_ratio=0.4 -design_step=0.06 -vol_reduction=0.05 -min_density=1e-3 -logdensity -nologcompliance  -usespinodal=true -testname=testspinodalopt

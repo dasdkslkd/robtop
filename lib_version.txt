@@ -1,0 +1,3 @@
+libmma.so.1 debug   tol=1e-7  float
+libmma.so.2 debug   tol-1e-5  float
+libmma.so   release tol=1e-5  float

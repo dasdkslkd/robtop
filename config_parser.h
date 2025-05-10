@@ -59,6 +59,10 @@ DECLARE_string(inputdensity);
 
 DECLARE_string(testmesh);
 
+DECLARE_bool(usespinodal);
+
+DECLARE_double(target_compliance);
+
 struct config_parser_t {
 
 	static_range::rangeUnion loadArea;

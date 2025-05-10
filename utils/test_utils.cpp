@@ -17,6 +17,8 @@
 #include "algorithm"
 #include "openvdb_wrapper_t.h"
 #include "dir_utils.h"
+#include <Python.h>
+#include "dltensor.h"
 
 void aggregatedSystem(const std::vector<int>& loadnodes, Eigen::MatrixXd& C, double err_tol = 1e-2, Eigen::MatrixXd* pZ = nullptr);
 void setForce(Eigen::Matrix<double, -1, 1>& f);
@@ -301,6 +303,13 @@ void TestSuit::testMain(const std::string& testname)
 	}
 	else if (testname == "testdistributeforce") {
 		testDistributeForceOpt();
+	}
+	else if (testname == "testspinodalopt") {
+		testSpinodalOpt();
+	}
+	else if  (testname == "targetc")
+	{
+		spinodalTargetCompliance();
 	}
 	else if (testname == "testmodipm") {
 		testModifiedPM();
@@ -1111,6 +1120,371 @@ void TestSuit::testDistributeForceOpt(void)
 	// write volume record during optimization
 	bio::write_vector(grids.getPath("vrec"), volRecord);
 
+}
+
+void CapsuleDeleter(PyObject* capsule)
+{
+}
+
+void TestSuit::testSpinodalOpt(void)
+{
+	Py_SetPythonHome(L"/home/xyz/miniconda3/envs/robtop");
+    if (!Py_IsInitialized())
+		Py_Initialize();
+	PyObject* sys = PyImport_ImportModule("sys");
+	PyObject* sys_path = PyObject_GetAttrString(sys, "path");
+	PyObject* new_path = PyUnicode_FromString(".");
+	PyList_Append(sys_path, new_path);
+	Py_DECREF(sys);
+	Py_DECREF(sys_path);
+	Py_DECREF(new_path);
+	PyErr_Print();
+	PyObject* module = PyImport_ImportModule("calsds");
+	PyErr_Print();
+	PyObject* func = PyObject_GetAttrString(module, "predict_dlpack");
+	PyErr_Print();
+
+	// prepare dltensor
+	int ne_gs=grids[0]->n_gselements;
+	float* x;
+	float* y;
+	float* J;
+	float *xvar;
+	cudaMalloc(&xvar, 4 * ne_gs * sizeof(float));
+	cudaMalloc(&x, 4 * ne_gs * sizeof(float));
+	cudaMalloc(&y,9*ne_gs*sizeof(float));
+	cudaMalloc(&J,36*ne_gs*sizeof(float));
+	auto x_tensor=CreateManagedTensor(x,{kDLCUDA,0},{kDLFloat,32,1},2,new int64_t[2]{ 4, ne_gs },nullptr,0,0,false);
+	auto y_tensor=CreateManagedTensor(y,{kDLCUDA,0},{kDLFloat,32,1},2,new int64_t[2]{ 9, ne_gs },nullptr,0,0,false);
+	auto J_tensor=CreateManagedTensor(J,{kDLCUDA,0},{kDLFloat,32,1},3,new int64_t[3]{ 9, 4, ne_gs },nullptr,0,0,false);
+
+	float pi=acos(-1.);
+	grids[0]->reset_force();
+	setForceSupport(getForceNormal(),grids[0]->getForce());
+	saveGpuVecD(grids.getPath("F1.txt"), grids[0]->getForce()[0], grids[0]->n_gselements);
+	saveGpuVecD(grids.getPath("F2.txt"), grids[0]->getForce()[1], grids[0]->n_gselements);
+	saveGpuVecD(grids.getPath("F3.txt"), grids[0]->getForce()[2], grids[0]->n_gselements);
+	if (!grids.hasSupport()) {
+		forceProject(grids[0]->getForce());
+	}
+	grids.writeSupportForce(grids.getPath("fs"));
+	initDesignVariables(params.volume_ratio,1./6,1./6,1./6);
+
+	float Vgoal=params.volume_ratio;
+	int itn=0;
+	snippet::converge_criteria stop_check(1, 2, 5e-3);
+	std::vector<double> cRecord, volRecord;
+	double Vc = Vgoal - params.volume_ratio;
+	std::vector<float> tmodipm;
+	double Md = 1, MdThres = 0.08;
+
+	while (itn++ < 100)
+	{
+		printf("\n* \033[32mITER %d \033[0m*\n", itn);
+		Vgoal *= (1 - params.volume_decrease);
+		Vc = Vgoal - params.volume_ratio;
+		if (Vgoal < params.volume_ratio) Vgoal = params.volume_ratio;
+		{cudaMemcpy(x,grids[0]->_gbuf.rho_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(x+ne_gs,grids[0]->_gbuf.t1_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(x+2*ne_gs,grids[0]->_gbuf.t2_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(x+3*ne_gs,grids[0]->_gbuf.t3_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+
+		saveGpuVec(grids.getPath("rho.txt"), x, ne_gs);
+		saveGpuVec(grids.getPath("t1.txt"), x+ne_gs, ne_gs);
+		saveGpuVec(grids.getPath("t2.txt"), x+2*ne_gs, ne_gs);
+		saveGpuVec(grids.getPath("t3.txt"), x+3*ne_gs, ne_gs);
+
+		PyObject *x_cap = PyCapsule_New(x_tensor, "dltensor", CapsuleDeleter);
+		PyObject* y_cap = PyCapsule_New(y_tensor, "dltensor", CapsuleDeleter);
+        PyObject* J_cap = PyCapsule_New(J_tensor, "dltensor", CapsuleDeleter);
+        PyObject* args = PyTuple_Pack(3, x_cap, y_cap, J_cap);
+        PyErr_Print();
+		PyObject_CallObject(func, args);
+        PyErr_Print();
+		cudaMemcpy(grids[0]->_gbuf.C11_e,y,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C12_e,y+ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C13_e,y+2*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C22_e,y+3*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C23_e,y+4*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C33_e,y+5*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C44_e,y+6*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C55_e,y+7*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C66_e,y+8*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C11r,J,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C11t1,J+ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C11t2,J+2*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C11t3,J+3*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C12r,J+4*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C12t1,J+5*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C12t2,J+6*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C12t3,J+7*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C13r,J+8*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C13t1,J+9*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C13t2,J+10*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C13t3,J+11*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C22r,J+12*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C22t1,J+13*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C22t2,J+14*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C22t3,J+15*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C23r,J+16*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C23t1,J+17*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C23t2,J+18*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C23t3,J+19*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C33r,J+20*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C33t1,J+21*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C33t2,J+22*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C33t3,J+23*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C44r,J+24*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C44t1,J+25*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C44t2,J+26*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C44t3,J+27*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C55r,J+28*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C55t1,J+29*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C55t2,J+30*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C55t3,J+31*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C66r,J+32*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C66t1,J+33*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C66t2,J+34*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C66t3,J+35*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+
+		// saveGpuVec(grids.getPath("c11.txt"), grids[0]->_gbuf.C11_e, ne_gs);
+		// saveGpuVec(grids.getPath("c12.txt"), grids[0]->_gbuf.C12_e, ne_gs);
+		// saveGpuVec(grids.getPath("c13.txt"), grids[0]->_gbuf.C13_e, ne_gs);
+		// saveGpuVec(grids.getPath("c22.txt"), grids[0]->_gbuf.C22_e, ne_gs);
+		// saveGpuVec(grids.getPath("c23.txt"), grids[0]->_gbuf.C23_e, ne_gs);
+		// saveGpuVec(grids.getPath("c33.txt"), grids[0]->_gbuf.C33_e, ne_gs);
+		// saveGpuVec(grids.getPath("c44.txt"), grids[0]->_gbuf.C44_e, ne_gs);
+		// saveGpuVec(grids.getPath("c55.txt"), grids[0]->_gbuf.C55_e, ne_gs);
+		// saveGpuVec(grids.getPath("c66.txt"), grids[0]->_gbuf.C66_e, ne_gs);
+
+		Py_XDECREF(args);Py_XDECREF(x_cap);Py_XDECREF(y_cap);Py_XDECREF(J_cap);
+        PyErr_Print();}
+
+		// saveGpuVecD(grids.getPath("F12.txt"),grids[0]->getForce()[0], grids[0]->n_gselements);
+		update_stencil();
+		// saveGpuVecD(grids.getPath("F13.txt"),grids[0]->getForce()[0], grids[0]->n_gselements);
+		// saveGpuVecD(grids.getPath("F14.txt"), grids[3]->getForce()[0], grids[3]->n_gselements);
+		double rel_res = 1;
+		int femit = 0;
+		while (rel_res > 1e-2 && femit++ < 50) 
+		{
+			rel_res = grids.v_cycle(1, 1);
+		}
+		// saveGpuVecD(grids.getPath("u1.txt"), grids[0]->_gbuf.U[0], ne_gs);
+		// saveGpuVecD(grids.getPath("u2.txt"), grids[0]->_gbuf.U[1], ne_gs);
+		// saveGpuVecD(grids.getPath("u3.txt"), grids[0]->_gbuf.U[2], ne_gs);
+		double c = grids[0]->compliance();
+
+		printf("-- c = %6.4e   r = %4.2lf%%  md = %4.2lf%%\n", c, rel_res * 100, Md * 100);
+		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
+		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
+		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio && Md < MdThres) break;
+		grids.log(itn);
+		computeSensitivity();
+
+		cudaMemcpy(xvar,grids[0]->_gbuf.rho_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(xvar+ne_gs,grids[0]->_gbuf.t1_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(xvar+2*ne_gs,grids[0]->_gbuf.t2_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(xvar+3*ne_gs,grids[0]->_gbuf.t3_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		updateDensitySpinodal(xvar, itn, Vgoal);
+		cudaMemcpy(grids[0]->_gbuf.rho_e,xvar,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.t1_e,xvar+ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.t2_e,xvar+2*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.t3_e,xvar+3*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+
+		Md = grids[0]->densityDiscretiness();
+	}
+	printf("\n=   finished   =\n");
+	grids.writeDensitySpinodal();
+	std::ofstream fc(grids.getPath("c.txt")), fv(grids.getPath("vrec.txt"));
+	for(auto val:cRecord)
+	{
+		fc << val << std::endl;
+	}
+	for(auto val:volRecord)
+	{
+		fv << val << std::endl;
+	}
+	fc.close();
+	fv.close();
+}
+
+void TestSuit::spinodalTargetCompliance(void)
+{
+	Py_SetPythonHome(L"/home/xyz/miniconda3/envs/robtop");
+    if (!Py_IsInitialized())
+		Py_Initialize();
+	PyObject* sys = PyImport_ImportModule("sys");
+	PyObject* sys_path = PyObject_GetAttrString(sys, "path");
+	PyObject* new_path = PyUnicode_FromString(".");
+	PyList_Append(sys_path, new_path);
+	Py_DECREF(sys);
+	Py_DECREF(sys_path);
+	Py_DECREF(new_path);
+	PyErr_Print();
+	PyObject* module = PyImport_ImportModule("calsds");
+	PyErr_Print();
+	PyObject* func = PyObject_GetAttrString(module, "predict_dlpack");
+	PyErr_Print();
+
+	// prepare dltensor
+	int ne_gs=grids[0]->n_gselements;
+	float* x;
+	float* y;
+	float* J;
+	float *xvar;
+	cudaMalloc(&xvar, 4 * ne_gs * sizeof(float));
+	cudaMalloc(&x, 4 * ne_gs * sizeof(float));
+	cudaMalloc(&y,9*ne_gs*sizeof(float));
+	cudaMalloc(&J,36*ne_gs*sizeof(float));
+	auto x_tensor=CreateManagedTensor(x,{kDLCUDA,0},{kDLFloat,32,1},2,new int64_t[2]{ 4, ne_gs },nullptr,0,0,false);
+	auto y_tensor=CreateManagedTensor(y,{kDLCUDA,0},{kDLFloat,32,1},2,new int64_t[2]{ 9, ne_gs },nullptr,0,0,false);
+	auto J_tensor=CreateManagedTensor(J,{kDLCUDA,0},{kDLFloat,32,1},3,new int64_t[3]{ 9, 4, ne_gs },nullptr,0,0,false);
+
+	float pi=acos(-1.);
+	grids[0]->reset_force();
+	setForceSupport(getForceNormal(),grids[0]->getForce());
+
+	if (!grids.hasSupport()) {
+		forceProject(grids[0]->getForce());
+	}
+	grids.writeSupportForce(grids.getPath("fs"));
+	initDesignVariables(params.volume_ratio,1./6,1./6,1./6);
+
+	float Vgoal=params.volume_ratio;
+	int itn=0;
+	snippet::converge_criteria stop_check(1, 2, 5e-3);
+	std::vector<double> cRecord, volRecord;
+	double Vc = Vgoal - params.volume_ratio;
+	std::vector<float> tmodipm;
+	double Md = 1, MdThres = 0.08;
+
+	double c0=params.target_compliance;
+
+	while (itn++ < 100)
+	{
+		printf("\n* \033[32mITER %d \033[0m*\n", itn);
+		Vgoal *= (1 - params.volume_decrease);
+		Vc = Vgoal - params.volume_ratio;
+		if (Vgoal < params.volume_ratio) Vgoal = params.volume_ratio;
+		{cudaMemcpy(x,grids[0]->_gbuf.rho_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(x+ne_gs,grids[0]->_gbuf.t1_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(x+2*ne_gs,grids[0]->_gbuf.t2_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(x+3*ne_gs,grids[0]->_gbuf.t3_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+
+		saveGpuVec(grids.getPath("rho.txt"), x, ne_gs);
+		saveGpuVec(grids.getPath("t1.txt"), x+ne_gs, ne_gs);
+		saveGpuVec(grids.getPath("t2.txt"), x+2*ne_gs, ne_gs);
+		saveGpuVec(grids.getPath("t3.txt"), x+3*ne_gs, ne_gs);
+
+		PyObject *x_cap = PyCapsule_New(x_tensor, "dltensor", CapsuleDeleter);
+		PyObject* y_cap = PyCapsule_New(y_tensor, "dltensor", CapsuleDeleter);
+        PyObject* J_cap = PyCapsule_New(J_tensor, "dltensor", CapsuleDeleter);
+        PyObject* args = PyTuple_Pack(3, x_cap, y_cap, J_cap);
+        PyErr_Print();
+		PyObject_CallObject(func, args);
+        PyErr_Print();
+		cudaMemcpy(grids[0]->_gbuf.C11_e,y,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C12_e,y+ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C13_e,y+2*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C22_e,y+3*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C23_e,y+4*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C33_e,y+5*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C44_e,y+6*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C55_e,y+7*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.C66_e,y+8*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C11r,J,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C11t1,J+ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C11t2,J+2*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C11t3,J+3*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C12r,J+4*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C12t1,J+5*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C12t2,J+6*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C12t3,J+7*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C13r,J+8*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C13t1,J+9*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C13t2,J+10*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C13t3,J+11*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C22r,J+12*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C22t1,J+13*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C22t2,J+14*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C22t3,J+15*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C23r,J+16*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C23t1,J+17*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C23t2,J+18*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C23t3,J+19*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C33r,J+20*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C33t1,J+21*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C33t2,J+22*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C33t3,J+23*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C44r,J+24*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C44t1,J+25*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C44t2,J+26*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C44t3,J+27*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C55r,J+28*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C55t1,J+29*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C55t2,J+30*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C55t3,J+31*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C66r,J+32*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C66t1,J+33*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C66t2,J+34*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.g_sens_C66t3,J+35*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+
+		// saveGpuVec(grids.getPath("c11.txt"), grids[0]->_gbuf.C11_e, ne_gs);
+		// saveGpuVec(grids.getPath("c12.txt"), grids[0]->_gbuf.C12_e, ne_gs);
+		// saveGpuVec(grids.getPath("c13.txt"), grids[0]->_gbuf.C13_e, ne_gs);
+		// saveGpuVec(grids.getPath("c22.txt"), grids[0]->_gbuf.C22_e, ne_gs);
+		// saveGpuVec(grids.getPath("c23.txt"), grids[0]->_gbuf.C23_e, ne_gs);
+		// saveGpuVec(grids.getPath("c33.txt"), grids[0]->_gbuf.C33_e, ne_gs);
+		// saveGpuVec(grids.getPath("c44.txt"), grids[0]->_gbuf.C44_e, ne_gs);
+		// saveGpuVec(grids.getPath("c55.txt"), grids[0]->_gbuf.C55_e, ne_gs);
+		// saveGpuVec(grids.getPath("c66.txt"), grids[0]->_gbuf.C66_e, ne_gs);
+
+		Py_XDECREF(args);Py_XDECREF(x_cap);Py_XDECREF(y_cap);Py_XDECREF(J_cap);
+        PyErr_Print();}
+
+		update_stencil();
+		double rel_res = 1;
+		int femit = 0;
+		while (rel_res > 1e-2 && femit++ < 50) 
+		{
+			rel_res = grids.v_cycle(1, 1);
+		}
+		double c = grids[0]->compliance();
+		double obj = (c - c0) * (c - c0);
+
+		printf("-- c = %6.4e   obj = %6.4e   r = %4.2lf%%  md = %4.2lf%%\n", c, obj, rel_res * 100, Md * 100);
+		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); break; }
+		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
+		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio && Md < MdThres) break;
+		grids.log(itn);
+		targetComplianceSens(c, c0);
+
+		cudaMemcpy(xvar,grids[0]->_gbuf.rho_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(xvar+ne_gs,grids[0]->_gbuf.t1_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(xvar+2*ne_gs,grids[0]->_gbuf.t2_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(xvar+3*ne_gs,grids[0]->_gbuf.t3_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		updateDensitySpinodal(xvar, itn, Vgoal);
+		cudaMemcpy(grids[0]->_gbuf.rho_e,xvar,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.t1_e,xvar+ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.t2_e,xvar+2*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+		cudaMemcpy(grids[0]->_gbuf.t3_e,xvar+3*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
+
+		Md = grids[0]->densityDiscretiness();
+	}
+	printf("\n=   finished   =\n");
+	grids.writeDensitySpinodal();
+	std::ofstream fc(grids.getPath("c.txt")), fv(grids.getPath("vrec.txt"));
+	for(auto val:cRecord)
+	{
+		fc << val << std::endl;
+	}
+	for(auto val:volRecord)
+	{
+		fv << val << std::endl;
+	}
+	fc.close();
+	fv.close();
 }
 
 void TestSuit::extractMeshFromDensity(void)
