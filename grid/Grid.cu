@@ -26,7 +26,15 @@ __constant__ double gTemplateMatrix33[24][24];
 __constant__ double gTemplateMatrix44[24][24];
 __constant__ double gTemplateMatrix55[24][24];
 __constant__ double gTemplateMatrix66[24][24];
-__constant__ int* gV2E[8];
+__constant__ double gB1[24][6];
+__constant__ double gB2[24][6];
+__constant__ double gB3[24][6];
+__constant__ double gB4[24][6];
+__constant__ double gB5[24][6];
+__constant__ double gB6[24][6];
+__constant__ double gB7[24][6];
+__constant__ double gB8[24][6];
+__constant__ int *gV2E[8];
 __constant__ int* gV2Vfine[27];
 __constant__ int* gV2Vcoarse[8];
 __constant__ int* gV2V[27];
@@ -100,6 +108,40 @@ __device__ void loadTemplateMatrix(volatile double KE[24][24]) {
 		j = kid % 24;
 		if (i < 24) {
 			KE[i][j] = gTemplateMatrix[i][j];
+		}
+		nfill += blockDim.x;
+	}
+	__syncthreads();
+}
+
+__device__ void loadB(volatile double B1[24][6],volatile double B2[24][6],volatile double B3[24][6],volatile double B4[24][6],volatile double B5[24][6],volatile double B6[24][6],volatile double B7[24][6],volatile double B8[24][6])
+{
+	int i = threadIdx.x / 6;
+	int j = threadIdx.x % 6;
+	if (i < 24) {
+		B1[i][j] = gB1[i][j];
+		B2[i][j] = gB2[i][j];
+		B3[i][j] = gB3[i][j];
+		B4[i][j] = gB4[i][j];
+		B5[i][j] = gB5[i][j];
+		B6[i][j] = gB6[i][j];
+		B7[i][j] = gB7[i][j];
+		B8[i][j] = gB8[i][j];
+	}
+	int nfill = blockDim.x;
+	while (nfill < 24 * 6) {
+		int kid = nfill + threadIdx.x;
+		i = kid / 6;
+		j = kid % 6;
+		if (i < 24) {
+			B1[i][j] = gB1[i][j];
+			B2[i][j] = gB2[i][j];
+			B3[i][j] = gB3[i][j];
+			B4[i][j] = gB4[i][j];
+			B5[i][j] = gB5[i][j];
+			B6[i][j] = gB6[i][j];
+			B7[i][j] = gB7[i][j];
+			B8[i][j] = gB8[i][j];
 		}
 		nfill += blockDim.x;
 	}
@@ -4252,6 +4294,89 @@ void grid::Grid::elementCompliance(double* u[3], double* f[3], float* dst)
 	size_t grid_size, block_size;
 	make_kernel_param(&grid_size, &block_size, n_gsvertices, 512);
 	elementCompliance_kernel << <grid_size, block_size >> > (n_gsvertices, ulist, flist, _gbuf.rho_e, dst);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+}
+
+__global__ void spinodalElementCompliance_kernel(int nv, devArray_t<double*, 3> ulist, devArray_t<double*, 3> flist, float* c11, float* c12, float* c13, float* c22, float* c23, float* c33, float* c44, float* c55, float* c66, float* clist) {
+	int tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+	__shared__ float KE11[24][24];
+	__shared__ float KE12[24][24];
+	__shared__ float KE13[24][24];
+	__shared__ float KE22[24][24];
+	__shared__ float KE23[24][24];
+	__shared__ float KE33[24][24];
+	__shared__ float KE44[24][24];
+	__shared__ float KE55[24][24];
+	__shared__ float KE66[24][24];
+	
+	loadTemplateMatrix11(KE11);
+	loadTemplateMatrix12(KE12);
+	loadTemplateMatrix13(KE13);
+	loadTemplateMatrix22(KE22);
+	loadTemplateMatrix23(KE23);
+	loadTemplateMatrix33(KE33);
+	loadTemplateMatrix44(KE44);
+	loadTemplateMatrix55(KE55);
+	loadTemplateMatrix66(KE66);
+
+	if (tid >= nv) return;
+
+	int v2v[27];
+
+	loadNeighborNodes(tid, v2v);
+
+	for (int e = 0; e < 8; e++) {
+		int vi = 7 - e;
+		int eid = gV2E[e][tid];
+		if (eid == -1) continue;
+		double KeU[3] = { 0,0,0 };
+		for (int vj = 0; vj < 8; vj++) {
+			int vjpos[3] = { e % 2 + vj % 2, e / 2 % 2 + vj / 2 % 2, e / 4 + vj / 4 };
+			int vjlid = vjpos[0] + vjpos[1] * 3 + vjpos[2] * 9;
+			int vjid = v2v[vjlid];
+			if (vjid == -1) continue;
+			double Uj[3] = { gU[0][vjid], gU[1][vjid], gU[2][vjid] };
+			for (int krow = 0; krow < 3; krow++) {
+				for (int kcol = 0; kcol < 3; kcol++) {
+					// KeU[krow] += penal * KE[vi * 3 + krow][vj * 3 + kcol] * Uj[kcol];
+					KeU[krow] += (
+						KE11[vi * 3 + krow][vj * 3 + kcol] * c11[eid] +
+						KE12[vi * 3 + krow][vj * 3 + kcol] * c12[eid] +
+						KE13[vi * 3 + krow][vj * 3 + kcol] * c13[eid] +
+						KE22[vi * 3 + krow][vj * 3 + kcol] * c22[eid] +
+						KE23[vi * 3 + krow][vj * 3 + kcol] * c23[eid] +
+						KE33[vi * 3 + krow][vj * 3 + kcol] * c33[eid] +
+						KE44[vi * 3 + krow][vj * 3 + kcol] * c44[eid] +
+						KE55[vi * 3 + krow][vj * 3 + kcol] * c55[eid] +
+						KE66[vi * 3 + krow][vj * 3 + kcol] * c66[eid]
+					) * Uj[kcol];
+				}
+			}
+		}
+
+		double Ui[3] = { gU[0][tid],gU[1][tid],gU[2][tid] };
+
+		double uKeu = Ui[0] * KeU[0] + Ui[1] * KeU[1] + Ui[2] * KeU[2];
+
+		atomicAdd(clist + eid, uKeu);
+	}
+	
+}
+
+void grid::Grid::spinodalElementCompliance(double* u[3], double* f[3])
+{
+	devArray_t<double*, 3> ulist, flist;
+	for (int i = 0; i < 3; i++) {
+		ulist[i] = u[i]; flist[i] = f[i];
+	}
+
+	init_array(_gbuf.strain_e, float{ 0 }, n_gselements);
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, n_gsvertices, 512);
+	spinodalElementCompliance_kernel << <grid_size, block_size >> > (n_gsvertices, ulist, flist, _gbuf.C11_e, _gbuf.C12_e, _gbuf.C13_e, _gbuf.C22_e, _gbuf.C23_e, _gbuf.C33_e, _gbuf.C44_e, _gbuf.C55_e, _gbuf.C66_e, _gbuf.strain_e);
 	cudaDeviceSynchronize();
 	cuda_error_check;
 }

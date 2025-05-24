@@ -1119,7 +1119,7 @@ void TestSuit::testDistributeForceOpt(void)
 
 	// write volume record during optimization
 	bio::write_vector(grids.getPath("vrec"), volRecord);
-
+	testCompliance();
 }
 
 void CapsuleDeleter(PyObject* capsule)
@@ -1293,6 +1293,8 @@ void TestSuit::testSpinodalOpt(void)
 		cudaMemcpy(grids[0]->_gbuf.t3_e,xvar+3*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
 
 		Md = grids[0]->densityDiscretiness();
+		if(itn==2)
+			break;
 	}
 	printf("\n=   finished   =\n");
 	grids.writeDensitySpinodal();
@@ -1307,6 +1309,11 @@ void TestSuit::testSpinodalOpt(void)
 	}
 	fc.close();
 	fv.close();
+	std::ofstream fcm(grids.getPath("cminmax.txt"));
+	std::cout << "-- cminmax " << *std::min_element(cRecord.begin(), cRecord.end()) << " " << *std::max_element(cRecord.begin(), cRecord.end()) << std::endl;
+	fcm << *std::min_element(cRecord.begin(), cRecord.end()) << std::endl;
+	fcm << *std::max_element(cRecord.begin(), cRecord.end()) << std::endl;
+	fcm.close();
 }
 
 void TestSuit::spinodalTargetCompliance(void)
@@ -1485,6 +1492,8 @@ void TestSuit::spinodalTargetCompliance(void)
 	}
 	fc.close();
 	fv.close();
+	grids[0]->spinodalElementCompliance(grids[0]->getDisplacement(),grids[0]->getForce());
+	spinodalDataset(params.volume_ratio);
 }
 
 void TestSuit::extractMeshFromDensity(void)
@@ -2319,3 +2328,153 @@ void TestSuit::stressAndComplianceOnVertex(const std::vector<glm::vec4>& p4list,
 	stressAndComplianceOnVertex_impl(elen, vlocate, inclusionOffset, clist, vonlist);
 }
 
+extern void stressAndComplianceOnVertex_spinodal_impl(double elen, const std::vector<int>& vlexid, const std::vector<glm::vec4>& inclusionPos, std::vector<float>& clist, std::vector<float>& vonlist);
+
+void TestSuit::spinodalDataset(float v)
+{
+	auto& vsat = grids.vrtsatlist[0];
+    auto& esat = grids.elesatlist[0];
+    int ereso = grids[0]->_ereso;
+    int vreso = grids[0]->_ereso + 1;
+    float origin[3] = { grids[0]->_box[0][0], grids[0]->_box[0][1], grids[0]->_box[0][2] };
+    float elen = grids[0]->elementLength();
+
+	std::vector<int> eidmaphost(grids[0]->n_elements);
+	gpu_manager_t::download_buf(eidmaphost.data(), grids[0]->_gbuf.eidmap, sizeof(int) * grids[0]->n_elements);
+	std::vector<float> rhohost(grids[0]->n_gselements);
+	std::vector<float> t1host(grids[0]->n_gselements);
+	std::vector<float> t2host(grids[0]->n_gselements);
+	std::vector<float> t3host(grids[0]->n_gselements);
+	std::vector<float> strain(grids[0]->n_gselements);
+	gpu_manager_t::download_buf(rhohost.data(), grids[0]->_gbuf.rho_e, sizeof(float) * grids[0]->n_gselements);
+	gpu_manager_t::download_buf(t1host.data(), grids[0]->_gbuf.t1_e, sizeof(float) * grids[0]->n_gselements);
+	gpu_manager_t::download_buf(t2host.data(), grids[0]->_gbuf.t2_e, sizeof(float) * grids[0]->n_gselements);
+	gpu_manager_t::download_buf(t3host.data(), grids[0]->_gbuf.t3_e, sizeof(float) * grids[0]->n_gselements);
+	gpu_manager_t::download_buf(strain.data(), grids[0]->_gbuf.strain_e, sizeof(float) * grids[0]->n_gselements);
+
+	int invalideid = 0;
+
+    std::vector<int> vlocate;
+	std::vector<int> pos[3];
+	std::vector<glm::vec4> inclusionOffset;
+	std::vector<float> data[6];// r t1 t2 t3 strain stress
+
+	// 遍历体素网格所有节点
+    for (int k = 0; k < ereso; ++k) {
+        for (int j = 0; j < ereso; ++j) {
+            for (int i = 0; i < ereso; ++i) {
+                int vid = i + j * vreso + k * vreso * vreso;
+                
+				int eid = i + j * ereso + k * ereso * ereso;
+				glm::vec4 offset(0.f);
+
+				if(esat(eid) == -1&& vsat(vid) == -1)
+				{
+					// printf("\033[31mInvalid voxel mesh\033[0m\n");
+					invalideid++;
+					continue;
+				}
+                if(esat(eid)!=-1)
+				{
+					pos[0].push_back(i);
+					pos[1].push_back(j);
+					pos[2].push_back(k);
+					data[0].push_back(rhohost[eidmaphost[esat(eid)]]);
+					data[1].push_back(t1host[eidmaphost[esat(eid)]]);
+					data[2].push_back(t2host[eidmaphost[esat(eid)]]);
+					data[3].push_back(t3host[eidmaphost[esat(eid)]]);
+					data[4].push_back(strain[eidmaphost[esat(eid)]]);
+					vlocate.push_back(vsat(vid));
+                	inclusionOffset.emplace_back(elen/2, elen/2, elen/2, 0.f);
+				}
+            }
+        }
+    }
+
+	std::vector<float> tmp;
+	printf("-- %d invalid nodes, total valid %zu\n", invalideid, vlocate.size());
+	stressAndComplianceOnVertex_spinodal_impl(elen,vlocate,inclusionOffset,tmp,data[5]);
+
+	std::ofstream ofile;
+	ofile.open(grids.getPath("spinodal.bin"), std::ios::out | std::ios::binary);
+	int n = vlocate.size();
+	std::cout << n << ' ' << ereso << std::endl;
+	ofile.write((char *)&n, sizeof(int));
+	ofile.write((char *)&ereso, sizeof(int));
+	ofile.write((char *)&v, sizeof(float));
+	ofile.write((char *)pos[0].data(), sizeof(int) * n);
+	ofile.write((char *)pos[1].data(), sizeof(int) * n);
+	ofile.write((char *)pos[2].data(), sizeof(int) * n);
+	ofile.write((char *)data[0].data(), sizeof(float) * n);
+	ofile.write((char *)data[1].data(), sizeof(float) * n);
+	ofile.write((char *)data[2].data(), sizeof(float) * n);
+	ofile.write((char *)data[3].data(), sizeof(float) * n);
+	ofile.write((char *)data[4].data(), sizeof(float) * n);
+	ofile.write((char *)data[5].data(), sizeof(float) * n);
+	ofile.close();
+}
+
+void TestSuit::testCompliance(void)
+{
+	auto& vsat = grids.vrtsatlist[0];
+    auto& esat = grids.elesatlist[0];
+    int ereso = grids[0]->_ereso;
+    int vreso = grids[0]->_ereso + 1;
+    float origin[3] = { grids[0]->_box[0][0], grids[0]->_box[0][1], grids[0]->_box[0][2] };
+    float elen = grids[0]->elementLength();
+
+	std::vector<int> eidmaphost(grids[0]->n_elements);
+	gpu_manager_t::download_buf(eidmaphost.data(), grids[0]->_gbuf.eidmap, sizeof(int) * grids[0]->n_elements);
+	std::vector<float> rhohost(grids[0]->n_gselements);
+	gpu_manager_t::download_buf(rhohost.data(), grids[0]->_gbuf.rho_e, sizeof(float) * grids[0]->n_gselements);
+	int invalideid = 0;
+
+    std::vector<int> vlocate;
+	std::vector<int> pos[3];
+	std::vector<glm::vec4> inclusionOffset;
+	std::vector<double> data[3];
+
+	// 遍历体素网格所有节点
+    for (int k = 0; k < ereso; ++k) {
+        for (int j = 0; j < ereso; ++j) {
+            for (int i = 0; i < ereso; ++i) {
+                int vid = i + j * vreso + k * vreso * vreso;
+                
+				int eid = i + j * ereso + k * ereso * ereso;
+				glm::vec4 offset(0.f);
+
+				if(esat(eid) == -1&& vsat(vid) == -1)
+				{
+					// printf("\033[31mInvalid voxel mesh\033[0m\n");
+					invalideid++;
+					continue;
+				}
+                if(esat(eid)!=-1)
+				{
+					pos[0].push_back(i);
+					pos[1].push_back(j);
+					pos[2].push_back(k);
+					data[0].push_back(rhohost[eidmaphost[esat(eid)]]);
+					vlocate.push_back(vsat(vid));
+                	inclusionOffset.emplace_back(elen/2, elen/2, elen/2, 0.f);
+				}
+            }
+        }
+    }
+
+    printf("-- %d invalid nodes, total valid %zu\n", invalideid, vlocate.size());
+	stressAndComplianceOnVertex_impl(elen,vlocate,inclusionOffset,data[1],data[2]);
+	std::ofstream ofile;
+	ofile.open(grids.getPath("testcompliance.bin"), std::ios::out | std::ios::binary);
+	int n = vlocate.size();
+	std::cout << n << ' ' << ereso << std::endl;
+	ofile.write((char *)&n, sizeof(int));
+	ofile.write((char *)&ereso, sizeof(int));
+	ofile.write((char *)pos[0].data(), sizeof(int) * n);
+	ofile.write((char *)pos[1].data(), sizeof(int) * n);
+	ofile.write((char *)pos[2].data(), sizeof(int) * n);
+	ofile.write((char *)data[0].data(), sizeof(double) * n);
+	ofile.write((char *)data[1].data(), sizeof(double) * n);
+	ofile.write((char *)data[2].data(), sizeof(double) * n);
+	ofile.close();
+}

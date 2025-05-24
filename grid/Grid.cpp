@@ -1708,6 +1708,7 @@ size_t grid::Grid::build(
 	if (_layer == 0) {
 		_gbuf.g_sens = (float*)gm.add_buf(_name + " g_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
 		_gbuf.g_sens_vol = (float*)gm.add_buf(_name + " g_sens_vol ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		_gbuf.strain_e = (float*)gm.add_buf(_name + " strain_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
 		if(grids._useSpinodal)
         {
 			_gbuf.g_sens_t1 = (float*)gm.add_buf(_name + " g_sens_t1 ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;

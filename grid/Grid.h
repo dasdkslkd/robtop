@@ -261,6 +261,7 @@ namespace grid {
 			float* g_sens_C55t3;
 			float* g_sens_C66t3;
 			float *g_sens_vol;
+			float* strain_e;
 
 			/*
 			  |_*_|_*_|_*_| * | * | * | * | * |
@@ -523,6 +524,8 @@ namespace grid {
 		void pertubForce(double ratio);
 
 		void elementCompliance(double* u[3], double* f[3], float* dst);
+
+		void spinodalElementCompliance(double* u[3], double* f[3]);
 
 		double densityDiscretiness(void);
 

@@ -81,6 +81,10 @@ public:
 	static void test2019(void);
 
 	static void stressAndComplianceOnVertex(const std::vector<glm::vec4>& p4, std::vector<double>& clist, std::vector<double>& vonlist);
+
+	static void spinodalDataset(float v);
+
+	static void testCompliance(void);
 };
 
 

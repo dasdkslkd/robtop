@@ -269,5 +269,211 @@ void stressAndComplianceOnVertex_impl(double elen, const std::vector<int>& vlexi
 	cudaFree(pv);
 }
 
+template<int BlockSize = 32 * 8>
+__global__ void stressAndComplianceOnVertex_spinodal_kernel(
+	int nv, int* vgsid, float* c11list, float* c12list, float* c13list, float* c22list, float* c23list, float* c33list, float* c44list, float* c55list, float* c66list, double elen,
+	glm::vec4* poffset, float* pc, float* pv
+) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+	__shared__ volatile double EPS[6][4][32];
+	initSharedMem(&EPS[0][0][0], sizeof(EPS) / sizeof(double));
+
+	double epsi[6] = { 0. };
+
+	int warpId = threadIdx.x / 32;
+	int warpTid = threadIdx.x % 32;
+
+	int id = (tid / BlockSize) * 32 + warpTid;
+
+	int vid;
+	float rho = 1;
+	int eid;
+	int nvpos[3];
+	int nid;
+	double u[3];
+	int N[3];
+	float r[3] = { 0. };
+	float d[3] = { 0. };
+	float invelen = 1.f / elen;
+	glm::vec4 ploc;
+	float oldd[3];
+	float c11=c11list[eid];
+	float c12=c12list[eid];
+	float c13=c13list[eid];
+	float c22=c22list[eid];
+	float c23=c23list[eid];
+	float c33=c33list[eid];
+	float c44=c44list[eid];
+	float c55=c55list[eid];
+	float c66=c66list[eid];
+
+	if (id >= nv) {
+		goto __blockSum;
+	}
+
+	vid = vgsid[id];
+
+	if (vid == -1) goto __blockSum;
+	
+	// checkout inclusion element density
+	eid = gV2E[7][vid];
+	if (eid == -1) goto __blockSum;
+	
+
+	nvpos[0] = 1 + warpId % 2; nvpos[1] = 1 + warpId / 2 % 2; nvpos[2] = 1 + warpId / 4;
+	nid = nvpos[0] + nvpos[1] * 3 + nvpos[2] * 3 * 3;
+
+	// relocate vid to its corresponding neighbor 
+	vid = gV2V[nid][vid];
+
+	ploc = poffset[id];
+
+	u[0] = gU[0][vid]; u[1] = gU[1][vid]; u[2] = gU[2][vid];
+
+	N[0] = warpId % 2; N[1] = warpId / 2 % 2; N[2] = warpId / 4;
+
+	for (int i = 0; i < 3; i++) {
+		if (!N[i]) {
+			r[i] = (elen - ploc[i]) / elen;
+			d[i] = -invelen;
+		}
+		else {
+			r[i] = ploc[i] / elen;
+			d[i] = invelen;
+		}
+	}
+
+	oldd[0] = d[0]; oldd[1] = d[1]; oldd[2] = d[2];
+	d[0] = oldd[0] * r[1]    * r[2];
+	d[1] = r[0]    * oldd[1] * r[2];
+	d[2] = r[0]    * r[1]    * oldd[2];
 
 
+	/* N_i  
+	    _ _ _ _ _ 
+	   |d0  0   0 |
+	   |0   d1  0 |
+	   |0   0   d2|
+	   |d1  d0  0 | 
+	   |d2  0   d0|
+	   |0   d2  d1|
+	*/
+
+	epsi[0] = d[0] * u[0];
+	epsi[1] = d[1] * u[1];
+	epsi[2] = d[2] * u[2];
+	epsi[3] = d[1] * u[0] + d[0] * u[1];
+	epsi[4] = d[2] * u[0] + d[0] * u[2];
+	epsi[5] = d[2] * u[1] + d[1] * u[2];
+
+__blockSum:
+	if (warpId >= 4) {
+		for (int i = 0; i < 6; i++) {
+			EPS[i][warpId - 4][warpTid] = epsi[i];
+		}
+	}
+	__syncthreads();
+
+	if (warpId < 4) {
+		for (int i = 0; i < 6; i++) {
+			EPS[i][warpId][warpTid] += epsi[i];
+		}
+	}
+	__syncthreads();
+	
+	if (warpId < 2) {
+		for (int i = 0; i < 6; i++) {
+			EPS[i][warpId][warpTid] += EPS[i][warpId + 2][warpTid];
+		}
+	}
+	__syncthreads();
+
+	if (warpId < 1 && eid != -1 && id < nv) {
+		for (int i = 0; i < 6; i++) {
+			epsi[i] = EPS[i][warpId][warpTid] + EPS[i][warpId + 1][warpTid];
+		}
+		// 1 - mu, mu, mu, 0, 0, 0,
+		//	mu, 1 - mu, mu, 0, 0, 0,
+		//	mu, mu, 1 - mu, 0, 0, 0,
+		//	0, 0, 0, (1 - 2 * mu) / 2, 0, 0,
+		//	0, 0, 0, 0, (1 - 2 * mu) / 2, 0,
+		//	0, 0, 0, 0, 0, (1 - 2 * mu) / 2;
+		//elastic_matrix /= (1 + poisson_ratio)*(1 - 2 * poisson_ratio);
+
+		float sigma[6];
+		sigma[0] = c11*epsi[0] + c12 * epsi[1] + c13 * epsi[2];
+		sigma[1] = c12 * epsi[0] + c22 * epsi[1] + c23 * epsi[2];
+		sigma[2] = c13 * epsi[0] + c23 * epsi[1] + c33 * epsi[2];
+		sigma[3] = c44 * epsi[3];
+		sigma[4] = c55 * epsi[4];
+		sigma[5] = c66 * epsi[5];
+
+		double c = 0, von = 0;
+		for (int i = 0; i < 6; i++) {
+			c += sigma[i] * epsi[i];
+		}
+		von = (double)powf(sigma[0] - sigma[1], 2) + powf(sigma[1] - sigma[2], 2) + powf(sigma[0] - sigma[2], 2) +
+			6 * (sigma[3] * sigma[3] + sigma[4] * sigma[4] + sigma[5] * sigma[5]);
+		von /= 2;
+		von = sqrt(von);
+		// DEBUG
+		//printf("[%d] pc = %6.4e, pv = %6.4e\n", id, c, von);
+		pc[id] = c;
+		pv[id] = von;
+	}
+
+}
+
+void stressAndComplianceOnVertex_spinodal_impl(double elen, const std::vector<int>& vlexid, const std::vector<glm::vec4>& inclusionPos, std::vector<float>& clist, std::vector<float>& vonlist)
+{
+	// allocate buffer for inclusion element ids
+	int* pvid;
+	cudaMalloc(&pvid, sizeof(int) * vlexid.size());
+	cudaMemcpy(pvid, vlexid.data(), sizeof(int) * vlexid.size(), cudaMemcpyHostToDevice);
+	grids[0]->lexico2gsorder_g(nullptr, vlexid.size(), pvid, vlexid.size(), pvid, grids[0]->getVidmap());
+	cuda_error_check;
+
+	// allocate buffer inclusion offset in element
+	glm::vec4* poffset;
+	cudaMalloc(&poffset, sizeof(glm::vec4) * inclusionPos.size());
+	cudaMemcpy(poffset, inclusionPos.data(), sizeof(glm::vec4) * inclusionPos.size(), cudaMemcpyHostToDevice);
+	cuda_error_check;
+
+	// allocate buffer to store stress and compliance
+	float* pc, *pv;
+	cudaMalloc(&pc, sizeof(float)* vlexid.size());
+	cudaMalloc(&pv, sizeof(float) * vlexid.size());
+	init_array(pc, 0.f, vlexid.size());
+	init_array(pv, 0.f, vlexid.size());
+
+	// get rholist
+	float* rholist = grids[0]->getRho();
+	float *c11list = grids[0]->_gbuf.C11_e;
+	float *c12list = grids[0]->_gbuf.C12_e;
+	float *c13list = grids[0]->_gbuf.C13_e;
+	float *c22list = grids[0]->_gbuf.C22_e;
+	float *c23list = grids[0]->_gbuf.C23_e;
+	float *c33list = grids[0]->_gbuf.C33_e;
+	float *c44list = grids[0]->_gbuf.C44_e;
+	float *c55list = grids[0]->_gbuf.C55_e;
+	float *c66list = grids[0]->_gbuf.C66_e;
+
+	// launch kernel to compute compliance and stress
+	grids[0]->use_grid();
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, vlexid.size() * 8, 32 * 8);
+	stressAndComplianceOnVertex_spinodal_kernel << <grid_size, block_size >> > ( vlexid.size(), pvid, c11list, c12list, c13list, c22list, c23list, c33list, c44list, c55list, c66list,
+		elen, poffset, pc, pv);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	clist.resize(vlexid.size());
+	vonlist.resize(vlexid.size());
+
+	cudaMemcpy(clist.data(), pc, sizeof(float) * vlexid.size(), cudaMemcpyDeviceToHost);
+	cudaMemcpy(vonlist.data(), pv, sizeof(float) * vlexid.size(), cudaMemcpyDeviceToHost);
+
+	cudaFree(pc);
+	cudaFree(pv);
+}
