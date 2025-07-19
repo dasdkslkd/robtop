@@ -1128,7 +1128,7 @@ void CapsuleDeleter(PyObject* capsule)
 
 void TestSuit::testSpinodalOpt(void)
 {
-	Py_SetPythonHome(L"/home/xyz/miniconda3/envs/robtop");
+	Py_SetPythonHome(L"/data2/xjn/miniconda3/envs/robtop");
     if (!Py_IsInitialized())
 		Py_Initialize();
 	PyObject* sys = PyImport_ImportModule("sys");
@@ -1161,14 +1161,14 @@ void TestSuit::testSpinodalOpt(void)
 	float pi=acos(-1.);
 	grids[0]->reset_force();
 	setForceSupport(getForceNormal(),grids[0]->getForce());
-	saveGpuVecD(grids.getPath("F1.txt"), grids[0]->getForce()[0], grids[0]->n_gselements);
-	saveGpuVecD(grids.getPath("F2.txt"), grids[0]->getForce()[1], grids[0]->n_gselements);
-	saveGpuVecD(grids.getPath("F3.txt"), grids[0]->getForce()[2], grids[0]->n_gselements);
+	// saveGpuVecD(grids.getPath("F1.txt"), grids[0]->getForce()[0], grids[0]->n_gselements);
+	// saveGpuVecD(grids.getPath("F2.txt"), grids[0]->getForce()[1], grids[0]->n_gselements);
+	// saveGpuVecD(grids.getPath("F3.txt"), grids[0]->getForce()[2], grids[0]->n_gselements);
 	if (!grids.hasSupport()) {
 		forceProject(grids[0]->getForce());
 	}
-	grids.writeSupportForce(grids.getPath("fs"));
-	initDesignVariables(params.volume_ratio,1./6,1./6,1./6);
+	// grids.writeSupportForce(grids.getPath("fs"));
+	initDesignVariables(params.volume_ratio<0.3?0.3:params.volume_ratio,1./6,1./6,1./6);
 
 	float Vgoal=params.volume_ratio;
 	int itn=0;
@@ -1189,10 +1189,10 @@ void TestSuit::testSpinodalOpt(void)
 		cudaMemcpy(x+2*ne_gs,grids[0]->_gbuf.t2_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
 		cudaMemcpy(x+3*ne_gs,grids[0]->_gbuf.t3_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
 
-		saveGpuVec(grids.getPath("rho.txt"), x, ne_gs);
-		saveGpuVec(grids.getPath("t1.txt"), x+ne_gs, ne_gs);
-		saveGpuVec(grids.getPath("t2.txt"), x+2*ne_gs, ne_gs);
-		saveGpuVec(grids.getPath("t3.txt"), x+3*ne_gs, ne_gs);
+		// saveGpuVec(grids.getPath("rho.txt"), x, ne_gs);
+		// saveGpuVec(grids.getPath("t1.txt"), x+ne_gs, ne_gs);
+		// saveGpuVec(grids.getPath("t2.txt"), x+2*ne_gs, ne_gs);
+		// saveGpuVec(grids.getPath("t3.txt"), x+3*ne_gs, ne_gs);
 
 		PyObject *x_cap = PyCapsule_New(x_tensor, "dltensor", CapsuleDeleter);
 		PyObject* y_cap = PyCapsule_New(y_tensor, "dltensor", CapsuleDeleter);
@@ -1276,7 +1276,7 @@ void TestSuit::testSpinodalOpt(void)
 		double c = grids[0]->compliance();
 
 		printf("-- c = %6.4e   r = %4.2lf%%  md = %4.2lf%%\n", c, rel_res * 100, Md * 100);
-		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
+		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); break; }
 		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
 		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio && Md < MdThres) break;
 		grids.log(itn);
@@ -1293,8 +1293,6 @@ void TestSuit::testSpinodalOpt(void)
 		cudaMemcpy(grids[0]->_gbuf.t3_e,xvar+3*ne_gs,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
 
 		Md = grids[0]->densityDiscretiness();
-		if(itn==2)
-			break;
 	}
 	printf("\n=   finished   =\n");
 	grids.writeDensitySpinodal();
@@ -1318,7 +1316,7 @@ void TestSuit::testSpinodalOpt(void)
 
 void TestSuit::spinodalTargetCompliance(void)
 {
-	Py_SetPythonHome(L"/home/xyz/miniconda3/envs/robtop");
+	Py_SetPythonHome(L"/data2/xjn/miniconda3/envs/robtop");
     if (!Py_IsInitialized())
 		Py_Initialize();
 	PyObject* sys = PyImport_ImportModule("sys");
@@ -1367,7 +1365,7 @@ void TestSuit::spinodalTargetCompliance(void)
 	double Md = 1, MdThres = 0.08;
 
 	double c0=params.target_compliance;
-
+#if 1
 	while (itn++ < 100)
 	{
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
@@ -1379,10 +1377,10 @@ void TestSuit::spinodalTargetCompliance(void)
 		cudaMemcpy(x+2*ne_gs,grids[0]->_gbuf.t2_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
 		cudaMemcpy(x+3*ne_gs,grids[0]->_gbuf.t3_e,ne_gs*sizeof(float),cudaMemcpyDeviceToDevice);
 
-		saveGpuVec(grids.getPath("rho.txt"), x, ne_gs);
-		saveGpuVec(grids.getPath("t1.txt"), x+ne_gs, ne_gs);
-		saveGpuVec(grids.getPath("t2.txt"), x+2*ne_gs, ne_gs);
-		saveGpuVec(grids.getPath("t3.txt"), x+3*ne_gs, ne_gs);
+		// saveGpuVec(grids.getPath("rho.txt"), x, ne_gs);
+		// saveGpuVec(grids.getPath("t1.txt"), x+ne_gs, ne_gs);
+		// saveGpuVec(grids.getPath("t2.txt"), x+2*ne_gs, ne_gs);
+		// saveGpuVec(grids.getPath("t3.txt"), x+3*ne_gs, ne_gs);
 
 		PyObject *x_cap = PyCapsule_New(x_tensor, "dltensor", CapsuleDeleter);
 		PyObject* y_cap = PyCapsule_New(y_tensor, "dltensor", CapsuleDeleter);
@@ -1493,7 +1491,20 @@ void TestSuit::spinodalTargetCompliance(void)
 	fc.close();
 	fv.close();
 	grids[0]->spinodalElementCompliance(grids[0]->getDisplacement(),grids[0]->getForce());
+#endif
 	spinodalDataset(params.volume_ratio);
+
+	update_stencil();
+	double rel_res = 1;
+	int femit = 0;
+	while (rel_res > 1e-2 && femit++ < 50) 
+	{
+		rel_res = grids.v_cycle(1, 1);
+	}
+	double c = grids[0]->compliance();
+	std::ofstream fcf(grids.getPath("cfinal.txt"));
+	fcf << c << std::endl;
+	fcf.close();
 }
 
 void TestSuit::extractMeshFromDensity(void)
@@ -2339,25 +2350,29 @@ void TestSuit::spinodalDataset(float v)
     float origin[3] = { grids[0]->_box[0][0], grids[0]->_box[0][1], grids[0]->_box[0][2] };
     float elen = grids[0]->elementLength();
 
-	std::vector<int> eidmaphost(grids[0]->n_elements);
+	std::vector<int> eidmaphost(grids[0]->n_elements);	
 	gpu_manager_t::download_buf(eidmaphost.data(), grids[0]->_gbuf.eidmap, sizeof(int) * grids[0]->n_elements);
 	std::vector<float> rhohost(grids[0]->n_gselements);
 	std::vector<float> t1host(grids[0]->n_gselements);
 	std::vector<float> t2host(grids[0]->n_gselements);
 	std::vector<float> t3host(grids[0]->n_gselements);
 	std::vector<float> strain(grids[0]->n_gselements);
+	std::vector<int> flag(grids[0]->n_gselements);
 	gpu_manager_t::download_buf(rhohost.data(), grids[0]->_gbuf.rho_e, sizeof(float) * grids[0]->n_gselements);
 	gpu_manager_t::download_buf(t1host.data(), grids[0]->_gbuf.t1_e, sizeof(float) * grids[0]->n_gselements);
 	gpu_manager_t::download_buf(t2host.data(), grids[0]->_gbuf.t2_e, sizeof(float) * grids[0]->n_gselements);
 	gpu_manager_t::download_buf(t3host.data(), grids[0]->_gbuf.t3_e, sizeof(float) * grids[0]->n_gselements);
 	gpu_manager_t::download_buf(strain.data(), grids[0]->_gbuf.strain_e, sizeof(float) * grids[0]->n_gselements);
+	gpu_manager_t::download_buf(flag.data(), grids[0]->_gbuf.eBitflag, sizeof(float) * grids[0]->n_gselements);
 
 	int invalideid = 0;
 
     std::vector<int> vlocate;
 	std::vector<int> pos[3];
+	std::vector<int> posv[3];
 	std::vector<glm::vec4> inclusionOffset;
 	std::vector<float> data[6];// r t1 t2 t3 strain stress
+	std::vector<int> cons[3];// solid/void load support
 
 	// 遍历体素网格所有节点
     for (int k = 0; k < ereso; ++k) {
@@ -2383,17 +2398,37 @@ void TestSuit::spinodalDataset(float v)
 					data[1].push_back(t1host[eidmaphost[esat(eid)]]);
 					data[2].push_back(t2host[eidmaphost[esat(eid)]]);
 					data[3].push_back(t3host[eidmaphost[esat(eid)]]);
-					data[4].push_back(strain[eidmaphost[esat(eid)]]);
+					// data[4].push_back(strain[eidmaphost[esat(eid)]]);
 					vlocate.push_back(vsat(vid));
                 	inclusionOffset.emplace_back(elen/2, elen/2, elen/2, 0.f);
 				}
-            }
+				if(esat(eid)!=-1)
+				{
+					if(flag[esat(eid)]&grid::Grid::Bitmask::mask_shellelement)
+						cons[0].push_back(2);
+					else
+						cons[0].push_back(1);
+				}
+				if(vsat(vid) != -1)
+				{
+					if(flag[vsat(vid)]&grid::Grid::Bitmask::mask_loadnodes)
+						cons[1].push_back(1);
+					else if(flag[vsat(vid)]&grid::Grid::Bitmask::mask_supportnodes)
+						cons[1].push_back(2);
+					else
+						cons[1].push_back(0);
+
+					posv[0].push_back(i);
+					posv[1].push_back(j);
+					posv[2].push_back(k);
+				}
+			}
         }
     }
 
-	std::vector<float> tmp;
+	// std::vector<float> tmp;
 	printf("-- %d invalid nodes, total valid %zu\n", invalideid, vlocate.size());
-	stressAndComplianceOnVertex_spinodal_impl(elen,vlocate,inclusionOffset,tmp,data[5]);
+	stressAndComplianceOnVertex_spinodal_impl(elen,vlocate,inclusionOffset,data[4],data[5]);
 
 	std::ofstream ofile;
 	ofile.open(grids.getPath("spinodal.bin"), std::ios::out | std::ios::binary);
@@ -2411,6 +2446,17 @@ void TestSuit::spinodalDataset(float v)
 	ofile.write((char *)data[3].data(), sizeof(float) * n);
 	ofile.write((char *)data[4].data(), sizeof(float) * n);
 	ofile.write((char *)data[5].data(), sizeof(float) * n);
+	ofile.close();
+
+	ofile.open(grids.getPath("bc.bin"), std::ios::out | std::ios::binary);
+	int nv = posv[0].size();
+	ofile.write((char *)&nv, sizeof(int));
+	ofile.write((char *)posv[0].data(), sizeof(int) * nv);
+	ofile.write((char *)posv[1].data(), sizeof(int) * nv);
+	ofile.write((char *)posv[2].data(), sizeof(int) * nv);
+	ofile.write((char *)cons[0].data(), sizeof(int) * nv);
+	ofile.write((char *)cons[1].data(), sizeof(int) * nv);
+	ofile.write((char *)cons[2].data(), sizeof(int) * nv);
 	ofile.close();
 }
 

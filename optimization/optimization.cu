@@ -513,6 +513,10 @@ void updateDensitySpinodal(float* xvar, int itn, float Vgoal)
 		float f0val, float* df0dx, float* gval, float* dgdx, float* low, float* upp,
 		float a0, float* a, float* c, float* d, float move);
 	static void* handle=dlopen("./libmma.so",RTLD_LAZY);
+    if (!handle) {
+fprintf(stderr, "%s\n", dlerror());
+exit(EXIT_FAILURE);
+}
 	static pmmasub mmasub=(pmmasub)dlsym(handle,"mmasub_from_g");
 	if(!mmasub)
 	{

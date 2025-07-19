@@ -90,6 +90,7 @@ void uploadLoadNodes(const std::vector<int>& loadnodes, std::vector<double> vtan
 	// upload pointer to tangent vector and normal vectors to constant memory
 	cudaMemcpyToSymbol(gLoadtangent, &gvtangent[0][0], sizeof(gLoadtangent));
 	cudaMemcpyToSymbol(gLoadnormal, &gvnormal[0], sizeof(gLoadnormal));
+	cuda_error_check;
 
 	// build load nodes sat
 	int nbitword = snippet::Round<grid::BitCount<unsigned int>::value>(_n_gsnodes) / grid::BitCount<unsigned int>::value;
@@ -97,6 +98,7 @@ void uploadLoadNodes(const std::vector<int>& loadnodes, std::vector<double> vtan
 	cudaMalloc(&vid2loadid._chunksat, (nbitword + 1) * sizeof(int));
 	init_array(const_cast<unsigned int*>(vid2loadid._bitarray), (unsigned int)(0), nbitword);
 	init_array(const_cast<int*>(vid2loadid._chunksat), int{ 0 }, nbitword + 1);
+	cuda_error_check;
 	// set bit of load nodes on device
 	auto loadsat = vid2loadid;
 	int* loadids = gloadnodes;
@@ -105,6 +107,7 @@ void uploadLoadNodes(const std::vector<int>& loadnodes, std::vector<double> vtan
 	};
 	size_t grid_size, block_size; make_kernel_param(&grid_size, &block_size, n_loadnodes(), 512);
 	traverse_noret << <grid_size, block_size >> > (n_loadnodes(), set_loadbit);
+	std::cout<< "Upload load nodes and build SAT on device, n_loadnodes = " << n_loadnodes() << std::endl;
 	cudaDeviceSynchronize(); cuda_error_check;
 	// compute sat on host and upload back to device
 	{
